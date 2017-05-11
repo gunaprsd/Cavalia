@@ -19,7 +19,7 @@ namespace Cavalia{
 					tlb_ptr->last_epoch_ = epoch;
 				}
 				else if (tlb_ptr->last_epoch_ != epoch){
-					assert(tlb_ptr->last_epoch_ + 1 == epoch);
+					//@guna changed: assert(tlb_ptr->last_epoch_ + 1 == epoch);
 					FILE *file_ptr = outfiles_[thread_id];
 					int result;
 					// record epoch.
