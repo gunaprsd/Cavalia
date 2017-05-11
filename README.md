@@ -13,7 +13,7 @@ Our project aims at faithfully implementing all kinds of concurrency-control and
 1. Download and install dependent libraries, including: boost-1.55.0 and libcuckoo;
 2. Clone Cavalia project, update CMakeLists.txt to set dependent library directories. 
 3. Build the project using the following command: 
-```
+```sh
 mkdir build; 
 cd build; 
 cmake -DCMAKE_INSTALL_PREFIX=/to/your/directory ..; 
