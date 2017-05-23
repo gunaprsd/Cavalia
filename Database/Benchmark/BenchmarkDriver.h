@@ -71,6 +71,10 @@ if (boost::filesystem::exists(full_name) == false){ \
 	BenchmarkName##ConcurrentExecutor executor(&io_redirector, &storage_manager, logger, NumCore); \
 	executor.Start();
 
+#define EXECUTE_TRANSACTIONS_CONCURRENT_WITH_SCHEDULER(BenchmarkName, NumCore) \
+	BenchmarkName##ConcurrentExecutor executor(&io_redirector, &storage_manager, scheduler, logger, NumCore); \
+	executor.Start();
+
 #define CONFIGURE_HSTORE(BenchmarkName, NumCore, NumNode) \
 	BenchmarkName##HStoreConfiguration configure(NumCore, NumNode); \
 	configure.MeasureConfiguration();

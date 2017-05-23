@@ -12,6 +12,8 @@
 #include "../Storage/ShareStorageManager.h"
 #include "../Transaction/StoredProcedure.h"
 #include "../Transaction/Epoch.h"
+#include "../Scheduler/BaseScheduler.h"
+#include "../Scheduler/SimpleScheduler.h"
 #include "BaseExecutor.h"
 #if defined(DBX) || defined(RTM) || defined(OCC_RTM) || defined(LOCK_RTM)
 #include <RtmLock.h>
@@ -19,10 +21,13 @@
 
 namespace Cavalia{
 	namespace Database{
-
+		class SimpleScheduler;
 		class ConcurrentExecutor : public BaseExecutor{
 		public:
-			ConcurrentExecutor(IORedirector *const redirector, BaseStorageManager *const storage_manager, BaseLogger *const logger, const size_t &thread_count) : BaseExecutor(redirector, logger, thread_count), storage_manager_(storage_manager){
+			ConcurrentExecutor(IORedirector *const redirector, 
+							  BaseStorageManager *const storage_manager, 
+							  BaseLogger *const logger,
+							  const size_t &thread_count) : BaseExecutor(redirector, logger, thread_count), storage_manager_(storage_manager) {
 				is_begin_ = false;
 				is_finish_ = false;
 				total_count_ = 0;
@@ -32,7 +37,9 @@ namespace Cavalia{
 					is_ready_[i] = false;
 				}
 				memset(&time_lock_, 0, sizeof(time_lock_));
+				scheduler_ = new SimpleScheduler(redirector_ptr_, this, thread_count_);
 			}
+
 			virtual ~ConcurrentExecutor(){
 				delete[] is_ready_;
 				is_ready_ = NULL;
@@ -43,8 +50,7 @@ namespace Cavalia{
 				PrepareProcedures();
 				ProcessQuery();
 			}
-
-		private:
+			
 			virtual void PrepareProcedures() = 0;
 			virtual TxnParam* DeserializeParam(const size_t &param_type, const CharArray &entry) = 0;
 
@@ -85,31 +91,13 @@ namespace Cavalia{
 #endif
 			}
 
-			void ProcessQueryThread(const size_t &thread_id, const size_t &core_id){
+			void ProcessQueryThread(const size_t &thread_id, const size_t &core_id) {
 				// note that core_id is not equal to thread_id.
 				PinToCore(core_id);
-				/////////////copy parameter to each core.
-				std::vector<ParamBatch*> execution_batches;
-				std::vector<ParamBatch*> *input_batches = redirector_ptr_->GetParameterBatches(thread_id);
-				for (size_t i = 0; i < input_batches->size(); ++i){
-					ParamBatch *tuple_batch = input_batches->at(i);
-					// copy to local memory.
-					ParamBatch *execution_batch = new ParamBatch(gParamBatchSize);
-					for (size_t j = 0; j < tuple_batch->size(); ++j) {
-						TxnParam *entry = tuple_batch->get(j);
-						// copy each parameter.
-						CharArray str;
-						entry->Serialize(str);
-						TxnParam* new_tuple = DeserializeParam(entry->type_, str);
-						execution_batch->push_back(new_tuple);
-						str.Clear();
-						delete entry;
-						entry = NULL;
-					}
-					execution_batches.push_back(execution_batch);
-					delete tuple_batch;
-					tuple_batch = NULL;
-				}
+				
+				//initializing the scheduler
+				scheduler_->Initialize(thread_id);
+
 				/////////////////////////////////////////////////
 				// prepare local managers.
 				size_t node_id = GetNumaNodeId(core_id);
@@ -135,7 +123,9 @@ namespace Cavalia{
 				CharArray ret;
 				ret.char_ptr_ = new char[1024];
 				ExeContext exe_context;
-				for (auto &tuples : execution_batches){
+				ParamBatch* tuples = NULL;
+
+				while((tuples = scheduler_->GetNextBatch(thread_id)) != NULL) {
 					for (size_t idx = 0; idx < tuples->size(); ++idx) {
 						TxnParam *tuple = tuples->get(idx);
 						//double a = r.next_uniform();
@@ -206,6 +196,7 @@ namespace Cavalia{
 						}
 					}
 				}
+					
 				time_lock_.lock();
 				end_timestamp_ = timer_.GetTimePoint();
 				is_finish_ = true;
@@ -238,6 +229,7 @@ namespace Cavalia{
 
 		private:
 			BaseStorageManager *const storage_manager_;
+			BaseScheduler *scheduler_;
 			TimeMeasurer timer_;
 			system_clock::time_point start_timestamp_;
 			system_clock::time_point end_timestamp_;

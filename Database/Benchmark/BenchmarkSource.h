@@ -39,8 +39,7 @@ namespace Cavalia{
 				if (is_exists_ == true) {
 					// load from file.
 					ReloadFromDisk();
-				}
-				else {
+				} else {
 					// generate params and dump to file.
 					output_file_.open(log_filename_, std::ofstream::binary);
 					StartGeneration();

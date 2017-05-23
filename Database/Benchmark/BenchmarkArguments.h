@@ -154,6 +154,7 @@ static void ArgumentsParser(int argc, char *argv[]) {
 		}
 		else if (argv[i][1] == 't') {
 			num_txn = atoi(&argv[i][2]);
+			printf("Setting num transactions to be %d\n", num_txn);
 		}
 		else if (argv[i][1] == 'd') {
 			dist_ratio = atoi(&argv[i][2]);

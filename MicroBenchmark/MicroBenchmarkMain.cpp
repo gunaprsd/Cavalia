@@ -10,6 +10,7 @@
 #include <Logger/CommandLogger.h>
 #include <Logger/ValueLogger.h>
 #include <Storage/ShareStorageManager.h>
+#include <Scheduler/SimpleScheduler.h>
 
 #include "MicroTableInitiator.h"
 #include "MicroPopulator.h"
@@ -30,9 +31,10 @@ int main(int argc, char *argv[]) {
 		POPULATE_STORAGE(Micro, dir_name);
 		PRINT_STORAGE_STATUS;
 		CHECKPOINT_STORAGE;
-	}
-	else if (app_type == APP_CC_EXECUTE){
+	} else if (app_type == APP_CC_EXECUTE){
 		assert(factor_count == 2);
+		//scale_factors[0] = sf, scale_factors[1] = theta for zipfian distribution
+		//Database size is sf * 1M records
 		MicroScaleParams params(scale_factors[0], scale_factors[1]);
 		BaseLogger *logger = NULL;
 #if defined(COMMAND_LOGGING)
@@ -41,6 +43,7 @@ int main(int argc, char *argv[]) {
 #if defined(VALUE_LOGGING)
 		ENABLE_VALUE_LOGGER(Micro, dir_name, num_core);
 #endif
+		
 		IORedirector io_redirector(num_core);
 		SET_SOURCE(Micro, dir_name, num_txn, dist_ratio);
 		INIT_PROFILERS;

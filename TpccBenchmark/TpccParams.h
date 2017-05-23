@@ -44,12 +44,10 @@ namespace Cavalia{
 				int w_id_;
 				int o_carrier_id_;
 				int64_t ol_delivery_d_;
-//#if defined(SLICE)
 				// additional parameters
 				int no_o_ids_[DISTRICTS_PER_WAREHOUSE];
 				double sums_[DISTRICTS_PER_WAREHOUSE];
 				int c_ids_[DISTRICTS_PER_WAREHOUSE];
-//#endif
 			};
 
 			class NewOrderParam : public TxnParam{

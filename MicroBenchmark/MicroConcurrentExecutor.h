@@ -3,7 +3,7 @@
 #define __CAVALIA_MICRO_BENCHMARK_MICRO_CONCURRENT_EXECUTOR_H__
 
 #include <Executor/ConcurrentExecutor.h>
-
+#include <Scheduler/SimpleScheduler.h>
 #include "AtomicProcedures/MicroProcedure.h"
 
 namespace Cavalia{
