@@ -37,9 +37,6 @@ namespace Cavalia{
 		};
 
 		class ParamBatch {
-#if defined(RECORD_CONTENTION)
-			vector<uint64_t>* contending_items_;
-#endif
 		public:
 			ParamBatch() {
 				params_ = new TxnParam*[gParamBatchSize];
@@ -83,6 +80,8 @@ namespace Cavalia{
 			size_t part_id_;
 			TxnParam *param_;
 		};
+
+		
 
 		class ParamBatchWrapper {
 		public:

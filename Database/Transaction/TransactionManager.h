@@ -63,13 +63,12 @@ namespace Cavalia{
 				TableRecord *t_record = NULL;
 				storage_manager_->tables_[table_id]->SelectKeyRecord(primary_key, t_record);
 				END_INDEX_TIME_MEASURE(thread_id_);
-				if (t_record != NULL){
+				if (t_record != NULL) {
 					BEGIN_PHASE_MEASURE(thread_id_, SELECT_PHASE);
 					bool rt = SelectRecordCC(context, table_id, t_record, record, access_type);
 					END_PHASE_MEASURE(thread_id_, SELECT_PHASE);
 					return rt;
-				}
-				else{
+				} else {
 					//assert(false);
 					// if no record is found, then a "virtual record" should be inserted as the placeholder so that we can lock it.
 					return true;
