@@ -31,6 +31,10 @@ void SimpleScheduler::Initialize(const size_t& thread_id) {
     batches_[thread_id] = execution_batches;
 }
 
+void SimpleScheduler::ThreadRun() {
+    executor_->is_scheduler_ready_ = true;
+}
+
 ParamBatch* SimpleScheduler::GetNextBatch(const size_t& thread_id) {
     int next_idx = ++last_allotted_batch_idx_[thread_id];
     if(next_idx < batches_[thread_id]->size()) {

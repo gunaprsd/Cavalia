@@ -14,10 +14,13 @@
 #include "../Transaction/Epoch.h"
 #include "../Scheduler/BaseScheduler.h"
 #include "../Scheduler/SimpleScheduler.h"
+#include "../Scheduler/AccessBasedScheduler.h"
 #include "BaseExecutor.h"
 #if defined(DBX) || defined(RTM) || defined(OCC_RTM) || defined(LOCK_RTM)
 #include <RtmLock.h>
 #endif
+
+#define ACCESS_BASED_SCHEDULER
 
 namespace Cavalia{
 	namespace Database{
@@ -36,8 +39,13 @@ namespace Cavalia{
 				for (size_t i = 0; i < thread_count_; ++i){
 					is_ready_[i] = false;
 				}
+				is_scheduler_ready_ = false;
 				memset(&time_lock_, 0, sizeof(time_lock_));
+#if defined(ACCESS_BASED_SCHEDULER)				
+				scheduler_ = new AccessBasedScheduler(redirector_ptr_, this, thread_count_);
+#else
 				scheduler_ = new SimpleScheduler(redirector_ptr_, this, thread_count_);
+#endif
 			}
 
 			virtual ~ConcurrentExecutor(){
@@ -56,6 +64,8 @@ namespace Cavalia{
 
 			virtual void ProcessQuery(){
 				boost::thread_group thread_group;
+				//uses one less core than thread_count_
+				//start the scheduler here 
 				for (size_t i = 0; i < this->thread_count_; ++i){
 					size_t core_id = GetCoreId(i);
 					thread_group.create_thread(boost::bind(&ConcurrentExecutor::ProcessQueryThread, this, i, core_id));
@@ -73,6 +83,11 @@ namespace Cavalia{
 					}
 					is_all_ready = true;
 				}
+				
+				//flag set by the scheduler when it is ready
+				thread_group.create_thread(boost::bind(&BaseScheduler::ThreadRun, scheduler_));
+				while(!is_scheduler_ready_);
+
 				// epoch generator.
 				Epoch epoch;
 				std::cout << "start processing..." << std::endl;
@@ -234,7 +249,6 @@ namespace Cavalia{
 			system_clock::time_point start_timestamp_;
 			system_clock::time_point end_timestamp_;
 			boost::detail::spinlock time_lock_;
-			volatile bool *is_ready_;
 			volatile bool is_begin_;
 			volatile bool is_finish_;
 			std::atomic<size_t> total_count_;
@@ -242,6 +256,9 @@ namespace Cavalia{
 #if defined(DBX) || defined(RTM) || defined(OCC_RTM) || defined(LOCK_RTM)
 			RtmLock rtm_lock_;
 #endif
+		public:
+			volatile bool *is_ready_;
+			volatile bool is_scheduler_ready_;
 		};
 	}
 }

@@ -21,7 +21,8 @@ namespace Cavalia{
 
 		const size_t kLogChunkSize = 10;
 		enum LockType : size_t{ NO_LOCK, READ_LOCK, WRITE_LOCK, CERTIFY_LOCK };
-		enum AccessType : size_t { READ_ONLY, READ_WRITE, INSERT_ONLY, DELETE_ONLY };
+		//adding NO_CC versions for standard access types
+		enum AccessType : size_t { READ_ONLY, READ_WRITE, INSERT_ONLY, DELETE_ONLY, NO_CC_READ_ONLY, NO_CC_READ_WRITE, NO_CC_INSERT_ONLY, NO_CC_DELETE_ONLY};
 		const size_t kInsert = 0;
 		const size_t kUpdate = 1;
 		const size_t kDelete = 2;

@@ -22,11 +22,9 @@
 	access_index_timer_ = new TimeMeasurer[kMaxThreadNum];
 #endif
 #define BEGIN_INDEX_TIME_MEASURE(thread_id) \
-	assert(thread_id==0);\
 	access_index_timer_[thread_id].StartTimer();
 
 #define END_INDEX_TIME_MEASURE(thread_id) \
-	assert(thread_id==0);\
 	access_index_timer_[thread_id].EndTimer(); \
 	access_index_stat_[thread_id] += access_index_timer_[thread_id].GetElapsedNanoSeconds();
 

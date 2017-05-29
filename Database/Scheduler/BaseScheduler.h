@@ -17,6 +17,7 @@ namespace Cavalia{
 			virtual ~BaseScheduler(){}
 			virtual void Initialize(const size_t& thread_id) = 0;
             virtual ParamBatch* GetNextBatch(const size_t& thread_id) = 0;
+			virtual void ThreadRun() = 0;
 		private:
 			BaseScheduler(const BaseScheduler &);
 			BaseScheduler& operator=(const BaseScheduler &);

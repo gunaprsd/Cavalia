@@ -1,4 +1,4 @@
-#if defined(LOCK_NAIVE)
+#if defined(LOCK)
 #include <iostream>
 #include "TransactionManager.h"
 
@@ -31,57 +31,59 @@ namespace Cavalia{
 
 		bool TransactionManager::SelectRecordCC(TxnContext *context, const size_t &table_id, TableRecord *t_record, SchemaRecord *&s_record, const AccessType access_type) {
 			s_record = t_record->record_;
-			if (access_type == READ_ONLY) {
+			if (access_type == READ_ONLY || access_type == NO_CC_READ_ONLY) {
 				// if cannot get lock, then return immediately.
-				if (t_record->content_.TryReadLock() == false) {
-					this->AbortTransaction();
-					return false;
+				if(access_type == READ_ONLY) {
+					if (t_record->content_.TryReadLock() == false) {
+						this->AbortTransaction();
+						return false;
+					}
 				}
-				else{
-					Access *access = access_list_.NewAccess();
-					access->access_type_ = READ_ONLY;
-					access->access_record_ = t_record;
-					access->local_record_ = NULL;
-					access->table_id_ = table_id;
-					access->timestamp_ = t_record->content_.GetTimestamp();
-					return true;
-				}
+				
+				//do this once you get the read lock or access type is NO_CC
+				Access *access = access_list_.NewAccess();
+				access->access_type_ = access_type;
+				access->access_record_ = t_record;
+				access->local_record_ = NULL;
+				access->table_id_ = table_id;
+				access->timestamp_ = t_record->content_.GetTimestamp();
+				return true;
 			}
-			else if (access_type == READ_WRITE) {
-				if (t_record->content_.TryWriteLock() == false) {
-					this->AbortTransaction();
-					return false;
+			else if (access_type == READ_WRITE || access_type == NO_CC_READ_WRITE) {
+				if(access_type == READ_WRITE) {
+					if (t_record->content_.TryWriteLock() == false) {
+						this->AbortTransaction();
+						return false;
+					}
 				}
-				else {
-					const RecordSchema *schema_ptr = t_record->record_->schema_ptr_;
-					char *local_data = MemAllocator::Alloc(schema_ptr->GetSchemaSize());
-					SchemaRecord *local_record = (SchemaRecord*)MemAllocator::Alloc(sizeof(SchemaRecord));
-					new(local_record)SchemaRecord(schema_ptr, local_data);
-					t_record->record_->CopyTo(local_record);
-					Access *access = access_list_.NewAccess();
-					access->access_type_ = READ_WRITE;
-					access->access_record_ = t_record;
-					access->local_record_ = local_record;
-					access->table_id_ = table_id;
-					access->timestamp_ = t_record->content_.GetTimestamp();
-					return true;
-				}
+				const RecordSchema *schema_ptr = t_record->record_->schema_ptr_;
+				char *local_data = MemAllocator::Alloc(schema_ptr->GetSchemaSize());
+				SchemaRecord *local_record = (SchemaRecord*)MemAllocator::Alloc(sizeof(SchemaRecord));
+				new(local_record)SchemaRecord(schema_ptr, local_data);
+				t_record->record_->CopyTo(local_record);
+				Access *access = access_list_.NewAccess();
+				access->access_type_ = access_type;
+				access->access_record_ = t_record;
+				access->local_record_ = local_record;
+				access->table_id_ = table_id;
+				access->timestamp_ = t_record->content_.GetTimestamp();
+				return true;
 			}
-			else if (access_type == DELETE_ONLY){
-				if (t_record->content_.TryWriteLock() == false){
-					this->AbortTransaction();
-					return false;
+			else if (access_type == DELETE_ONLY || access_type == NO_CC_DELETE_ONLY){
+				if(access_type == DELETE_ONLY) {
+					if (t_record->content_.TryWriteLock() == false){
+						this->AbortTransaction();
+						return false;
+					}
 				}
-				else{
-					t_record->record_->is_visible_ = false;
-					Access *access = access_list_.NewAccess();
-					access->access_type_ = DELETE_ONLY;
-					access->access_record_ = t_record;
-					access->local_record_ = NULL;
-					access->table_id_ = table_id;
-					access->timestamp_ = t_record->content_.GetTimestamp();
-					return true;
-				}
+				t_record->record_->is_visible_ = false;
+				Access *access = access_list_.NewAccess();
+				access->access_type_ = access_type;
+				access->access_record_ = t_record;
+				access->local_record_ = NULL;
+				access->table_id_ = table_id;
+				access->timestamp_ = t_record->content_.GetTimestamp();
+				return true;
 			}
 			else{
 				assert(false);
@@ -113,15 +115,15 @@ namespace Cavalia{
 			for (size_t i = 0; i < access_list_.access_count_; ++i){
 				Access *access_ptr = access_list_.GetAccess(i);
 				auto &content_ref = access_ptr->access_record_->content_;
-				if (access_ptr->access_type_ == READ_WRITE){
+				if (access_ptr->access_type_ == READ_WRITE || access_ptr->access_type_ == NO_CC_READ_WRITE){
 					assert(commit_ts >= access_ptr->timestamp_);
 					content_ref.SetTimestamp(commit_ts);
 				}
-				else if (access_ptr->access_type_ == INSERT_ONLY){
+				else if (access_ptr->access_type_ == INSERT_ONLY || access_ptr->access_type_ == NO_CC_INSERT_ONLY){
 					assert(commit_ts >= access_ptr->timestamp_);
 					content_ref.SetTimestamp(commit_ts);
 				}
-				else if (access_ptr->access_type_ == DELETE_ONLY){
+				else if (access_ptr->access_type_ == DELETE_ONLY || access_ptr->access_type_ == NO_CC_DELETE_ONLY){
 					assert(commit_ts >= access_ptr->timestamp_);
 					content_ref.SetTimestamp(commit_ts);
 				}
@@ -136,19 +138,19 @@ namespace Cavalia{
 			logger_->CommitTransaction(this->thread_id_, curr_epoch, commit_ts, context->txn_type_, param);
 #endif
 			// release locks.
-			for (size_t i = 0; i < access_list_.access_count_; ++i){
+			for (size_t i = 0; i < access_list_.access_count_; ++i) {
 				Access *access_ptr = access_list_.GetAccess(i);
 				if (access_ptr->access_type_ == READ_ONLY){
 					access_ptr->access_record_->content_.ReleaseReadLock();
 				}
-				else if (access_ptr->access_type_ == READ_WRITE){
+				else if (access_ptr->access_type_ == READ_WRITE) {
 					SchemaRecord *local_record_ptr = access_ptr->local_record_;
 					access_ptr->access_record_->content_.ReleaseWriteLock();
 					MemAllocator::Free(local_record_ptr->data_ptr_);
 					local_record_ptr->~SchemaRecord();
 					MemAllocator::Free((char*)local_record_ptr);
 				}
-				else {
+				else if(access_ptr->access_type_ == INSERT_ONLY || access_ptr->access_type_ == DELETE_ONLY) {
 					// insert_only or delete_only
 					access_ptr->access_record_->content_.ReleaseWriteLock();
 				}

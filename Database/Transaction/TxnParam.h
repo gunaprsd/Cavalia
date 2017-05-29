@@ -10,30 +10,18 @@
 
 namespace Cavalia{
 	namespace Database{
-		struct AccessWrapper
-		{
-			uint64_t hash_code_;
-			AccessType access_type_;
-
-			AccessWrapper() {}
-			AccessWrapper(uint64_t hash_code, AccessType access_type) {
-				hash_code_ = hash_code;
-				access_type_ = access_type;
-			}
-		};
-
-		class TxnParam{
+		struct ReadWriteSet;
+		class TxnParam {
 		public:
-			TxnParam(){}
+			TxnParam() {}
 			virtual ~TxnParam(){}
 			virtual uint64_t GetHashCode() const = 0;
 			virtual void Serialize(CharArray& serial_str) const = 0;
 			virtual void Serialize(char *buffer, size_t &buffer_size) const = 0;
 			virtual void Deserialize(const CharArray& serial_str) = 0;
-			virtual std::vector<AccessWrapper>* GetReadWriteSet() = 0; 
+			virtual void BuildReadWriteSet(ReadWriteSet* batch_rw_set) = 0;
 		public:
 			size_t type_;
-			std::vector<AccessWrapper>* rw_set_;
 		};
 
 		class ParamBatch {

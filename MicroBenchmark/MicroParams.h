@@ -7,6 +7,7 @@
 #include "MicroRecords.h"
 #include "MicroMeta.h"
 #include "MicroConstants.h"
+#include <Scheduler/AccessBasedScheduler.h>
 
 namespace Cavalia{
 	namespace Benchmark{
@@ -17,6 +18,7 @@ namespace Cavalia{
 				MicroParam(){
 					type_ = MICRO;
 				}
+				
 				virtual ~MicroParam(){}
 
 				virtual uint64_t GetHashCode() const{
@@ -32,27 +34,29 @@ namespace Cavalia{
 					buffer_size = sizeof(int64_t) * NUM_ACCESSES;
 					memcpy(buffer, reinterpret_cast<const char*>(keys_), sizeof(int64_t) * NUM_ACCESSES);
 				}
+
 				virtual void Deserialize(const CharArray& serial_str) {
 					memcpy(reinterpret_cast<char*>(keys_), serial_str.char_ptr_, sizeof(int64_t) * NUM_ACCESSES);
 				}
 
-				virtual std::vector<AccessWrapper>* GetReadWriteSet() {
-					if(rw_set_ == NULL) {
-						rw_set_ = new std::vector<AccessWrapper>(NUM_ACCESSES);
-						for (size_t i = 0; i < NUM_ACCESSES / 2; ++i) {
-							(*rw_set_)[i].hash_code_ = keys_[i];
-							(*rw_set_)[i].access_type_ = READ_ONLY;
-						}
-						for (size_t i = NUM_ACCESSES / 2; i < NUM_ACCESSES; ++i) {
-							(*rw_set_)[i].hash_code_ = keys_[i];
-							(*rw_set_)[i].access_type_ = READ_WRITE;
-						}
+				virtual void BuildReadWriteSet(ReadWriteSet* batch_rw_set) {
+					for (size_t i = 0; i < NUM_ACCESSES / 2; ++i) {
+						BatchAccessInfo* info = batch_rw_set->GetOrAdd(keys_[i]);
+						rw_set_.Add(keys_[i], info);
+						info->AddTransaction(this);
 					}
-					return rw_set_;
+
+					for (size_t i = NUM_ACCESSES / 2; i < NUM_ACCESSES; ++i) {
+						BatchAccessInfo* info = batch_rw_set->GetOrAdd(keys_[i]);
+						rw_set_.Add(keys_[i], info);
+						info->AddTransaction(this);
+						info->has_writes_ = true;						
+					}
 				}
 
 			public:
 				int64_t keys_[NUM_ACCESSES];
+				ReadWriteSet rw_set_;
 			};
 		}
 	}

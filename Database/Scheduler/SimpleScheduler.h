@@ -16,8 +16,14 @@ namespace Cavalia{
         class ConcurrentExecutor;
 		class SimpleScheduler : public BaseScheduler {
 		public:
-			SimpleScheduler(IORedirector *const redirector, ConcurrentExecutor* executor, const size_t &thread_count) : BaseScheduler(redirector, thread_count), executor_(executor), last_allotted_batch_idx_(thread_count), batches_(thread_count) {}
+			SimpleScheduler(IORedirector *const redirector, ConcurrentExecutor* executor, const size_t &thread_count) : 
+			BaseScheduler(redirector, thread_count), 
+			executor_(executor), 
+			last_allotted_batch_idx_(thread_count), 
+			batches_(thread_count) {}
+			
 			virtual ~SimpleScheduler(){}
+			virtual void ThreadRun();
 			virtual void Initialize(const size_t& thread_id);
             virtual ParamBatch* GetNextBatch(const size_t& thread_id);
 		private:

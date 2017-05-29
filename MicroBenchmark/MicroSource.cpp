@@ -1,5 +1,4 @@
 #include "MicroSource.h"
-#define DEBUG_DIST 
 namespace Cavalia{
 	namespace Benchmark{
 		namespace Micro{
