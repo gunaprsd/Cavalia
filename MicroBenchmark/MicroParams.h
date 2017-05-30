@@ -7,7 +7,7 @@
 #include "MicroRecords.h"
 #include "MicroMeta.h"
 #include "MicroConstants.h"
-#include <Scheduler/AccessBasedScheduler.h>
+#include <Scheduler/AccessInfo.h>
 
 namespace Cavalia{
 	namespace Benchmark{
@@ -39,19 +39,23 @@ namespace Cavalia{
 					memcpy(reinterpret_cast<char*>(keys_), serial_str.char_ptr_, sizeof(int64_t) * NUM_ACCESSES);
 				}
 
-				virtual void BuildReadWriteSet(ReadWriteSet* batch_rw_set) {
+				virtual void BuildReadWriteSet(ReadWriteSet& batch_rw_set) {
 					for (size_t i = 0; i < NUM_ACCESSES / 2; ++i) {
-						BatchAccessInfo* info = batch_rw_set->GetOrAdd(keys_[i]);
+						BatchAccessInfo* info = batch_rw_set.GetOrAdd(keys_[i]);
 						rw_set_.Add(keys_[i], info);
 						info->AddTransaction(this);
 					}
 
 					for (size_t i = NUM_ACCESSES / 2; i < NUM_ACCESSES; ++i) {
-						BatchAccessInfo* info = batch_rw_set->GetOrAdd(keys_[i]);
+						BatchAccessInfo* info = batch_rw_set.GetOrAdd(keys_[i]);
 						rw_set_.Add(keys_[i], info);
 						info->AddTransaction(this);
 						info->has_writes_ = true;						
 					}
+				}
+
+				virtual ReadWriteSet& GetReadWriteSet() {
+					return rw_set_;
 				}
 
 			public:

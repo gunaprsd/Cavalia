@@ -14,13 +14,14 @@
 #include "../Transaction/Epoch.h"
 #include "../Scheduler/BaseScheduler.h"
 #include "../Scheduler/SimpleScheduler.h"
-#include "../Scheduler/AccessBasedScheduler.h"
+#include "../Scheduler/WaitSyncScheduler.h"
+#include "../Scheduler/SharedWorklistScheduler.h"
 #include "BaseExecutor.h"
 #if defined(DBX) || defined(RTM) || defined(OCC_RTM) || defined(LOCK_RTM)
 #include <RtmLock.h>
 #endif
 
-#define ACCESS_BASED_SCHEDULER
+#define SHARED_WORKLIST_SCHEDULER
 
 namespace Cavalia{
 	namespace Database{
@@ -41,8 +42,10 @@ namespace Cavalia{
 				}
 				is_scheduler_ready_ = false;
 				memset(&time_lock_, 0, sizeof(time_lock_));
-#if defined(ACCESS_BASED_SCHEDULER)				
+#if defined(ACCESS_BASED_SCHEDULER)
 				scheduler_ = new AccessBasedScheduler(redirector_ptr_, this, thread_count_);
+#elif defined(SHARED_WORKLIST_SCHEDULER)				
+				scheduler_ = new SharedWorklistScheduler(redirector_ptr_, this, thread_count_);
 #else
 				scheduler_ = new SimpleScheduler(redirector_ptr_, this, thread_count_);
 #endif
@@ -64,8 +67,6 @@ namespace Cavalia{
 
 			virtual void ProcessQuery(){
 				boost::thread_group thread_group;
-				//uses one less core than thread_count_
-				//start the scheduler here 
 				for (size_t i = 0; i < this->thread_count_; ++i){
 					size_t core_id = GetCoreId(i);
 					thread_group.create_thread(boost::bind(&ConcurrentExecutor::ProcessQueryThread, this, i, core_id));

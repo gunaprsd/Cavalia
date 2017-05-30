@@ -19,9 +19,11 @@ namespace Cavalia{
 			virtual void Serialize(CharArray& serial_str) const = 0;
 			virtual void Serialize(char *buffer, size_t &buffer_size) const = 0;
 			virtual void Deserialize(const CharArray& serial_str) = 0;
-			virtual void BuildReadWriteSet(ReadWriteSet* batch_rw_set) = 0;
+			virtual void BuildReadWriteSet(ReadWriteSet& batch_rw_set) = 0;
+			virtual ReadWriteSet& GetReadWriteSet() = 0;
 		public:
 			size_t type_;
+			char* data_;
 		};
 
 		class ParamBatch {
@@ -55,9 +57,6 @@ namespace Cavalia{
 			TxnParam* get(const size_t idx) const {
 				return params_[idx];
 			}
-
-
-
 		private:
 			TxnParam **params_;
 			size_t param_count_;

@@ -3,7 +3,7 @@
 #define __CAVALIA_MICRO_BENCHMARK_ATOMIC_PROCEDURES_MICRO_PROCEDURE_H__
 
 #include <Transaction/StoredProcedure.h>
-#include <Scheduler/AccessBasedScheduler.h>
+#include <Scheduler/AccessInfo.h>
 #include "../MicroInformation.h"
 
 namespace Cavalia{
@@ -15,7 +15,7 @@ namespace Cavalia{
 					MicroProcedure(const size_t &txn_type) : StoredProcedure(txn_type){}
 					virtual ~MicroProcedure(){}
 
-					virtual bool Execute(TxnParam *param, CharArray &ret, const ExeContext &exe_context){
+					virtual bool Execute(TxnParam *param, CharArray &ret, const ExeContext &exe_context) {
 						MicroParam* micro_param = static_cast<MicroParam*>(param);
 						for (size_t i = 0; i < NUM_ACCESSES / 2; ++i){
 							SchemaRecord *record = NULL;
