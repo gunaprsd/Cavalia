@@ -21,8 +21,6 @@
 #include <RtmLock.h>
 #endif
 
-#define SHARED_WORKLIST_SCHEDULER
-
 namespace Cavalia{
 	namespace Database{
 		class SimpleScheduler;
