@@ -6,6 +6,7 @@
 #include <atomic>
 #include <unordered_map>
 #include <unordered_set>
+#include <iostream>
 #include "../Transaction/TxnParam.h"
 namespace Cavalia{
 	namespace Database{
@@ -47,11 +48,10 @@ namespace Cavalia{
 		struct ClusterInfo
 		{
 			TxnParam* owner_;
-			size_t size_;
 			std::vector<TxnParam*> members_;
 			std::unordered_set<BatchAccessInfo*> items_accessed_;
 			
-			ClusterInfo(TxnParam* owner) : owner_(owner), members_(), items_accessed_(), size_(0) {
+			ClusterInfo(TxnParam* owner) : owner_(owner), members_(), items_accessed_() {
 				AddMembers(owner_);
 				AddNeighborsOf(owner_);
 			}
@@ -102,11 +102,11 @@ namespace Cavalia{
 			inline void AddMembers(TxnParam* other) {
 				if(other->data_ == NULL) {
 					members_.push_back(other);
-					size_++;
 				} else {
 					ClusterInfo* info = (ClusterInfo*)other->data_;
-					size_ += info->size_;
-					members_.insert(members_.end(), info->members_.begin(), info->members_.end());
+					for(auto iter = info->members_.begin(); iter != info->members_.end(); iter++) {
+						members_.push_back(*iter);
+					}
 				}
 			}
 			
@@ -120,7 +120,7 @@ namespace Cavalia{
 			}
 
 			inline size_t GetSize() {
-				return size_;
+				return members_.size();
 			}
 
 			//Merges t2 to t1 or t1 to t2 and returns the representative 
@@ -135,10 +135,14 @@ namespace Cavalia{
 					if(info1->GetSize() < info2->GetSize()) {
 						//merge t1 with t2
 						info2->MergeClusters(t1);
+						delete info1;
+						t1->data_ = NULL;
 						return t2;
 					} else {
 						//merge t2 with t1
 						info1->MergeClusters(t2);
+						delete info2;
+						t2->data_ = NULL;
 						return t1;
 					}
 				} else if(t1_is_cluster && !t2_is_cluster) {
@@ -153,11 +157,17 @@ namespace Cavalia{
 					return t2;
 				} else {
 					//create a new clusterinfo
-					ClusterInfo* info1 = new ClusterInfo(t1);
-					t1->data_ = (char*)info1;
+					ClusterInfo* info1 = CreateClusterInfo(t1);
 					info1->MergeClusters(t2);
 					return t1;
 				}
+			}
+
+			static ClusterInfo* CreateClusterInfo(TxnParam* param) {
+				assert(param->data_ == NULL);
+				ClusterInfo* info1 = new ClusterInfo(param);
+				param->data_ = (char*)info1;
+				return info1;
 			}
 		};
     }

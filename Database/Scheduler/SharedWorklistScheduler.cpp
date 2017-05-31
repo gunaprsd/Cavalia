@@ -110,7 +110,7 @@ SimpleConcurrentWorklist* SharedWorklistScheduler::DoDataBasedPartition(int batc
         if(size > 1 && size < MAX_ATOMIC_BATCH_SIZE) {
             interesting_items.insert(info);
             max_progress = std::max(max_progress, info->txns_.size());
-        } else {
+        } else if(size == 1) {
             info->avoid_cc_ = true;
         }
     }
@@ -120,10 +120,11 @@ SimpleConcurrentWorklist* SharedWorklistScheduler::DoDataBasedPartition(int batc
     only once and merge them if the size constraints are satisfied */
     size_t progress = 2;
     std::vector<BatchAccessInfo*> targets;
-    while(progress < max_progress) {
+    while(progress <= max_progress) {
         //collect target items for this round
         for(auto iter = interesting_items.begin(); iter != interesting_items.end(); iter++) {
-            if((*iter)->txns_.size() <= progress) {
+            BatchAccessInfo* info = (*iter);
+            if(info->txns_.size() <= progress) {
                 targets.push_back(*iter);
             }
         }
@@ -144,21 +145,20 @@ SimpleConcurrentWorklist* SharedWorklistScheduler::DoDataBasedPartition(int batc
             }
 
             if(resulting_cluster_size < MAX_ATOMIC_BATCH_SIZE) {
-                //go ahead with merging
-                auto txn_iter = info->txns_.begin();
-                TxnParam* final_cluster = *txn_iter;
-                txn_iter++;
-                for(; txn_iter != info->txns_.end(); txn_iter++) {
-                    TxnParam* t1 = *txn_iter;
-                    TxnParam* t2 = final_cluster;
-                    final_cluster = ClusterInfo::Merge(t1, t2);
-                    //careful here: we keep the one which has cluster_info
-                    if(final_cluster == t1) {
+                while(info->txns_.size() > 1) {
+                    auto iter = info->txns_.begin();
+                    auto t1 = *iter; 
+                    iter++;
+                    auto t2 = *iter;
+                    auto merged = ClusterInfo::Merge(t1, t2);
+                    if(merged == t1) {
                         clusters.erase(t2);
                     } else {
                         clusters.erase(t1);
                     }
                 }
+                info->avoid_cc_ = true;
+                interesting_items.erase(info);
             } else {
                 //remove from interesting items so that we don't get it again
                 interesting_items.erase(info);
@@ -190,11 +190,14 @@ SimpleConcurrentWorklist* SharedWorklistScheduler::DoDataBasedPartition(int batc
         
         if(param->data_ == NULL) {
             current_batch->push_back(param);
+            current_batch_size++;
         } else {
             ClusterInfo* info = (ClusterInfo*)param->data_;
             for(auto txn_iter = info->members_.begin(); txn_iter != info->members_.end(); txn_iter++) {
-                current_batch->push_back(param);
+                current_batch->push_back(*iter);
+                current_batch_size++;
             }
+            delete info;
         }
     }
     //adding last batch

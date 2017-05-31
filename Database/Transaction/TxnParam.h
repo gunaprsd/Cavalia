@@ -13,7 +13,7 @@ namespace Cavalia{
 		struct ReadWriteSet;
 		class TxnParam {
 		public:
-			TxnParam() {}
+			TxnParam() : data_(NULL) {}
 			virtual ~TxnParam(){}
 			virtual uint64_t GetHashCode() const = 0;
 			virtual void Serialize(CharArray& serial_str) const = 0;
@@ -39,6 +39,7 @@ namespace Cavalia{
 				param_count_ = 0;
 				batch_size_ = batch_size;
 			}
+
 			~ParamBatch() {
 				delete[] params_;
 				params_ = NULL;
