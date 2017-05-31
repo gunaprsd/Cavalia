@@ -8,8 +8,6 @@ namespace Cavalia {
 			// insert with visibility bit set to false.
 			record->is_visible_ = false;
 			TableRecord *tb_record = new TableRecord(record);
-			// the to-be-inserted record may have already existed.
-			//if (storage_manager_->tables_[table_id]->InsertRecord(primary_key, tb_record) == true){
 			Access *access = access_list_.NewAccess();
 			access->access_type_ = INSERT_ONLY;
 			access->access_record_ = tb_record;
@@ -18,12 +16,6 @@ namespace Cavalia {
 			access->timestamp_ = 0;
 			END_PHASE_MEASURE(thread_id_, INSERT_PHASE);
 			return true;
-			/*}
-			else{
-			// if the record has already existed, then we need to lock the original record.
-			END_PHASE_MEASURE(thread_id_, INSERT_PHASE);
-			return true;
-			}*/
 		}
 
 		bool TransactionManager::SelectRecordCC(TxnContext *context, const size_t &table_id, TableRecord *t_record, SchemaRecord *&s_record, const AccessType access_type) {
@@ -167,29 +159,31 @@ namespace Cavalia {
 				// if successful, then overwrite and commit
 				//**********************************************************
 				if (is_success == true) {
+					
 					BEGIN_CC_TS_ALLOC_TIME_MEASURE(thread_id_);
 					uint64_t curr_epoch = Epoch::GetEpoch();
-#if defined(SCALABLE_TIMESTAMP)
-					uint64_t max_rw_ts = 0;
-					for (size_t i = 0; i < access_list_.access_count_; ++i){
-						Access *access_ptr = access_list_.GetAccess(i);
-						if (access_ptr->timestamp_ > max_rw_ts){
-							max_rw_ts = access_ptr->timestamp_;
-						}
-					}
-					for (size_t i = 0; i < hot_access_list_.access_count_; ++i){
-						Access *access_ptr = hot_access_list_.GetAccess(i);
-						if (access_ptr->timestamp_ > max_rw_ts){
-							max_rw_ts = access_ptr->timestamp_;
-						}
-					}
-					uint64_t commit_ts = GenerateScalableTimestamp(curr_epoch, max_rw_ts);
-#else
-					uint64_t commit_ts = GenerateMonotoneTimestamp(curr_epoch, GlobalTimestamp::GetMonotoneTimestamp());
-#endif
-					END_CC_TS_ALLOC_TIME_MEASURE(thread_id_);
-					if (access_list_.access_count_ != 0){
+					#if defined(SCALABLE_TIMESTAMP)
+						uint64_t max_rw_ts = 0;
 						for (size_t i = 0; i < access_list_.access_count_; ++i){
+							Access *access_ptr = access_list_.GetAccess(i);
+							if (access_ptr->timestamp_ > max_rw_ts){
+								max_rw_ts = access_ptr->timestamp_;
+							}
+						}
+						for (size_t i = 0; i < hot_access_list_.access_count_; ++i){
+							Access *access_ptr = hot_access_list_.GetAccess(i);
+							if (access_ptr->timestamp_ > max_rw_ts){
+								max_rw_ts = access_ptr->timestamp_;
+							}
+						}
+						uint64_t commit_ts = GenerateScalableTimestamp(curr_epoch, max_rw_ts);
+					#else
+						uint64_t commit_ts = GenerateMonotoneTimestamp(curr_epoch, GlobalTimestamp::GetMonotoneTimestamp());
+					#endif
+					END_CC_TS_ALLOC_TIME_MEASURE(thread_id_);
+
+					if (access_list_.access_count_ != 0) {
+						for (size_t i = 0; i < access_list_.access_count_; ++i) {
 							Access *access_ptr = access_list_.GetAccess(i);
 							SchemaRecord *global_record_ptr = access_ptr->access_record_->record_;
 							SchemaRecord *local_record_ptr = access_ptr->local_record_;

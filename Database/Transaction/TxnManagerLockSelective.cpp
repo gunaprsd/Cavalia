@@ -1,4 +1,4 @@
-#if defined(LOCK)
+#if defined(LOCK_SELECTIVE)
 #include <iostream>
 #include "TransactionManager.h"
 

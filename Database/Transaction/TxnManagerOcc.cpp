@@ -3,6 +3,20 @@
 
 namespace Cavalia {
 	namespace Database {
+		/*
+		** Optimistic Concurrency Control: 
+		** -------------------------------
+		** Enabled by -DOCC compiler flag
+		**
+		** Implementation of a vanilla OCC. SelectCC command (READ_ONLY, READ_WRITE or DELETE_ONLY) reads data from 
+		** table as is and records the timestamp. For READ_WRITE access, in addition it creates a local copy of the data.
+		** During the validation phase, the accesses are sorted based on timestamp (ascending). For each access, appropriate
+		** lock (READ_LOCK or WRITE_LOCK) is acquired and then validated by comparing the timestamps. If validation does not 
+		** succeed, all acquired locks are released and the transaction is aborted. If validation succeeds, all changes 
+		** are reflected on the global table and logged. Then locks are released and data structures cleaned up.
+		*/
+
+		
 		bool TransactionManager::InsertRecord(TxnContext *context, const size_t &table_id, const std::string &primary_key, SchemaRecord *record) {
 			BEGIN_PHASE_MEASURE(thread_id_, INSERT_PHASE);
 			// insert with visibility bit set to false.
@@ -138,6 +152,7 @@ namespace Cavalia {
 				#endif
 				END_CC_TS_ALLOC_TIME_MEASURE(thread_id_);
 
+				//updating the table
 				for (size_t i = 0; i < access_list_.access_count_; ++i) {
 					Access *access_ptr = access_list_.GetAccess(i);
 					SchemaRecord *global_record_ptr = access_ptr->access_record_->record_;

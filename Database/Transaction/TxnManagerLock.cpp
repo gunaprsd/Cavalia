@@ -1,9 +1,21 @@
-#if defined(LOCK_NAIVE)
+#if defined(LOCK)
 #include <iostream>
 #include "TransactionManager.h"
 
 namespace Cavalia {
 	namespace Database {
+		/*
+		** 2 Phase Locking - No Wait:
+		** --------------------------
+		** Enabled by compiler flag -DLOCK
+		** 
+		** Implementation of Two phase locking, where locks are released only during the commit time.
+		** Locks are acquired using a TryLock primitive and if unable to lock an item, then the transaction
+		** aborts and retries. It does not wait till the locks are acquired. During commit phase, all changes
+		** are persisted (in-memory and on-disk) and locks released. Nothing particularly fancy going on here. 
+		*/
+
+
 		bool TransactionManager::InsertRecord(TxnContext *context, const size_t &table_id, const std::string &primary_key, SchemaRecord *record){
 			BEGIN_PHASE_MEASURE(thread_id_, INSERT_PHASE);
 			record->is_visible_ = false;

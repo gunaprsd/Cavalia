@@ -3,6 +3,18 @@
 
 namespace Cavalia{
 	namespace Database{
+		/*
+		** 2 Phase Locking - Wait Die Strategy:
+		** ------------------------------------
+		** Enabled by compiler flag -DLOCK_WAIT
+		** 
+		** Implementation of Two phase locking, where locks are released only during the commit time.
+		** A request for lock acquisition succeeds when there is no potential deadlock cycle created by waiting. 
+		** If request is denied, then transaction is aborted. Lock waiting is implemented using a waiting queue and
+		** each thread waits until lock is acquired. It does not wait till the locks are acquired. During commit 
+		** phase, all changes are persisted (in-memory and on-disk) and locks released. 
+		*/
+
 		bool TransactionManager::InsertRecord(TxnContext *context, const size_t &table_id, const std::string &primary_key, SchemaRecord *record){
 			BEGIN_PHASE_MEASURE(thread_id_, INSERT_PHASE);
 			if (is_first_access_ == true) {

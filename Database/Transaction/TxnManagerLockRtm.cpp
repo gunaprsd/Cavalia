@@ -3,6 +3,10 @@
 
 namespace Cavalia {
 	namespace Database {
+		/*
+		** 
+		*/
+
 		bool TransactionManager::InsertRecord(TxnContext *context, const size_t &table_id, const std::string &primary_key, SchemaRecord *record) {
 			BEGIN_PHASE_MEASURE(thread_id_, INSERT_PHASE);
 			// insert with visibility bit set to false.
@@ -277,9 +281,13 @@ namespace Cavalia {
 								END_CC_MEM_ALLOC_TIME_MEASURE(thread_id_);
 								break;
 							}
+							case DELETE_ONLY:
+							{
+								content_ref.ReleaseWriteLock();
+								break;
+							}
 							default: 
-								// insert_only or delete_only
-								//content_ref.ReleaseWriteLock();
+								//insert only left
 								break;
 						}
 					}
@@ -304,8 +312,8 @@ namespace Cavalia {
 									MemAllocator::Free((char*)local_record_ptr);
 									END_CC_MEM_ALLOC_TIME_MEASURE(thread_id_);
 								} else {
-									for (auto iter = garbage_set_.begin(); iter != garbage_set_.end();){
-										if (iter->first->content_.GetCounter() == 0){
+									for (auto iter = garbage_set_.begin(); iter != garbage_set_.end();) {
+										if (iter->first->content_.GetCounter() == 0) {
 											BEGIN_CC_MEM_ALLOC_TIME_MEASURE(thread_id_);
 											SchemaRecord *local_record_ptr = iter->second;
 											MemAllocator::Free(local_record_ptr->data_ptr_);
@@ -313,8 +321,7 @@ namespace Cavalia {
 											MemAllocator::Free((char*)local_record_ptr);
 											END_CC_MEM_ALLOC_TIME_MEASURE(thread_id_);
 											iter = garbage_set_.erase(iter);
-										}
-										else{
+										} else {
 											++iter;
 										}
 									}
@@ -392,7 +399,7 @@ namespace Cavalia {
 							case DELETE_ONLY: 
 							{
 								global_record_ptr->is_visible_ = true;
-								//content_ref.ReleaseWriteLock();
+								content_ref.ReleaseWriteLock();
 								break;
 							}
 						}
@@ -471,7 +478,7 @@ namespace Cavalia {
 					case DELETE_ONLY: 
 					{
 						global_record_ptr->is_visible_ = true;
-						//content_ref.ReleaseWriteLock();
+						content_ref.ReleaseWriteLock();
 						break;
 					}
 					default:

@@ -6,7 +6,7 @@
 
 #if defined(LOCK_WAIT)
 #include "../Content/LockWaitContent.h"
-#elif defined(LOCK) || defined(OCC) || defined(SILO) || defined(ST)
+#elif defined(LOCK) || defined(OCC) || defined(SILO) || defined(ST) || defined(LOCK_SELECTIVE)
 #include "../Content/LockContent.h"
 #elif defined(SILOCK) || defined(SIOCC)
 #include "../Content/SiLockContent.h"
@@ -50,7 +50,7 @@ namespace Cavalia{
 
 #if defined(LOCK_WAIT)
 			LockWaitContent content_;
-#elif defined(LOCK) || defined(OCC) || defined(SILO) || defined(ST)
+#elif defined(LOCK) || defined(OCC) || defined(SILO) || defined(ST) || defined(LOCK_SELECTIVE)
 			LockContent content_;
 #elif defined(SILOCK) || defined(SIOCC)
 			SiLockContent content_;
