@@ -21,6 +21,8 @@
 #include <RtmLock.h>
 #endif
 
+#define SHARED_WORKLIST_SCHEDULER
+
 namespace Cavalia{
 	namespace Database{
 		class SimpleScheduler;
@@ -40,8 +42,8 @@ namespace Cavalia{
 				}
 				is_scheduler_ready_ = false;
 				memset(&time_lock_, 0, sizeof(time_lock_));
-#if defined(ACCESS_BASED_SCHEDULER)
-				scheduler_ = new AccessBasedScheduler(redirector_ptr_, this, thread_count_);
+#if defined(WAIT_SYNC_SCHEDULER)
+				scheduler_ = new WaitSyncScheduler(redirector_ptr_, this, thread_count_);
 #elif defined(SHARED_WORKLIST_SCHEDULER)				
 				scheduler_ = new SharedWorklistScheduler(redirector_ptr_, this, thread_count_);
 #else

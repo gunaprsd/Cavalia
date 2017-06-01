@@ -7,6 +7,7 @@
 #include <vector>
 #include <CharArray.h>
 #include "../Meta/MetaTypes.h"
+#include "TxnContext.h"
 
 namespace Cavalia{
 	namespace Database{
@@ -58,13 +59,15 @@ namespace Cavalia{
 			TxnParam* get(const size_t idx) const {
 				return params_[idx];
 			}
+			ConcurrencyControlType cc_type_;
 		private:
 			TxnParam **params_;
 			size_t param_count_;
 			size_t batch_size_;
 		};
 
-		struct ParamPtrWrapper{
+		struct ParamPtrWrapper
+		{
 			size_t part_id_;
 			TxnParam *param_;
 		};

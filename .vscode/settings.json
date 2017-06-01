@@ -57,6 +57,7 @@
         "map": "cpp",
         "set": "cpp",
         "algorithm": "cpp",
-        "__mutex_base": "cpp"
+        "__mutex_base": "cpp",
+        "__locale": "cpp"
     }
 }

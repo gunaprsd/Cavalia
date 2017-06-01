@@ -4,9 +4,12 @@
 
 #include "SchemaRecord.h"
 
-#if defined(LOCK_WAIT)
+#if defined(DYNAMIC_CC)
 #include "../Content/LockWaitContent.h"
-#elif defined(LOCK) || defined(OCC) || defined(SILO) || defined(ST) || defined(LOCK_SELECTIVE)
+#include "../Content/LockContent.h"
+#elif defined(LOCK_WAIT)
+#include "../Content/LockWaitContent.h"
+#elif defined(LOCK) || defined(OCC) || defined(SILO) || defined(ST)
 #include "../Content/LockContent.h"
 #elif defined(SILOCK) || defined(SIOCC)
 #include "../Content/SiLockContent.h"
@@ -37,6 +40,7 @@ namespace Cavalia{
 #else
 		struct TableRecord{
 #endif
+
 #if defined(MVLOCK_WAIT) || defined(MVLOCK) || defined(MVOCC) || defined(MVTO) || defined(SILOCK) || defined(SIOCC)
 			TableRecord(SchemaRecord *record) : record_(record), content_(record->data_ptr_) {}
 #elif defined(TO)
@@ -48,9 +52,12 @@ namespace Cavalia{
 			
 			SchemaRecord *record_;
 
-#if defined(LOCK_WAIT)
-			LockWaitContent content_;
-#elif defined(LOCK) || defined(OCC) || defined(SILO) || defined(ST) || defined(LOCK_SELECTIVE)
+#if defined(DYNAMIC_CC)
+			LockWaitContent wait_content_; //for 2PL
+			LockContent content_; //for OCC
+#elif defined(LOCK_WAIT)
+			LockWaitContent wait_content_;
+#elif defined(LOCK) || defined(OCC) || defined(SILO) || defined(ST)
 			LockContent content_;
 #elif defined(SILOCK) || defined(SIOCC)
 			SiLockContent content_;

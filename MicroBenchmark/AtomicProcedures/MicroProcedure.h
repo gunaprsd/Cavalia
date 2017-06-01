@@ -6,6 +6,7 @@
 #include <Scheduler/AccessInfo.h>
 #include "../MicroInformation.h"
 
+
 namespace Cavalia{
 	namespace Benchmark{
 		namespace Micro{
@@ -16,6 +17,9 @@ namespace Cavalia{
 					virtual ~MicroProcedure(){}
 
 					virtual bool Execute(TxnParam *param, CharArray &ret, const ExeContext &exe_context) {
+						#if defined(DYNAMIC_CC) 
+							context_.cc_type_ = exe_context.cc_type_;
+						#endif
 						MicroParam* micro_param = static_cast<MicroParam*>(param);
 						for (size_t i = 0; i < NUM_ACCESSES / 2; ++i){
 							SchemaRecord *record = NULL;

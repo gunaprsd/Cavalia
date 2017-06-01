@@ -1,4 +1,4 @@
-#if defined(LOCK_WAIT)
+#if defined(LOCK_WAIT) || defined(DYNAMIC_CC)
 #include "TransactionManager.h"
 
 namespace Cavalia{
@@ -15,7 +15,12 @@ namespace Cavalia{
 		** phase, all changes are persisted (in-memory and on-disk) and locks released. 
 		*/
 
-		bool TransactionManager::InsertRecord(TxnContext *context, const size_t &table_id, const std::string &primary_key, SchemaRecord *record){
+		#if defined(DYNAMIC_CC)
+			CC_INSERT_FUNCTION_HEADER_SPECIFIED(LockWait)
+		#else 
+			bool TransactionManager::InsertRecord(TxnContext *context, const size_t &table_id, const std::string &primary_key, SchemaRecord *record) 
+		#endif
+		{
 			BEGIN_PHASE_MEASURE(thread_id_, INSERT_PHASE);
 			if (is_first_access_ == true) {
 				BEGIN_CC_TS_ALLOC_TIME_MEASURE(thread_id_);
@@ -43,7 +48,12 @@ namespace Cavalia{
 			return true;
 		}
 
-		bool TransactionManager::SelectRecordCC(TxnContext *context, const size_t &table_id, TableRecord *t_record, SchemaRecord *&s_record, const AccessType access_type) {
+		#if defined(DYNAMIC_CC)
+			CC_SELECT_FUNCTION_HEADER_SPECIFIED(LockWait)
+		#else
+			bool TransactionManager::SelectRecordCC(TxnContext *context, const size_t &table_id, TableRecord *t_record, SchemaRecord *&s_record, const AccessType access_type) 
+		#endif
+		{
 			s_record = t_record->record_;
 			if (is_first_access_ == true) {
 				BEGIN_CC_TS_ALLOC_TIME_MEASURE(thread_id_);
@@ -63,8 +73,8 @@ namespace Cavalia{
 				case READ_ONLY: 
 				{
 					// if cannot get lock, then return immediately.
-					if (t_record->content_.AcquireLock(start_timestamp_, LockType::READ_LOCK, &lock_ready) == false){
-						this->AbortTransaction();
+					if (t_record->wait_content_.AcquireLock(start_timestamp_, LockType::READ_LOCK, &lock_ready) == false) {
+						this->AbortTransaction(context);
 						return false;
 					} else {
 						BEGIN_CC_WAIT_TIME_MEASURE(thread_id_);
@@ -75,14 +85,14 @@ namespace Cavalia{
 						access->access_record_ = t_record;
 						access->local_record_ = NULL;
 						access->table_id_ = table_id;
-						access->timestamp_ = t_record->content_.GetTimestamp();
+						access->timestamp_ = t_record->wait_content_.GetTimestamp();
 						return true;
 					}
 				}
 				case READ_WRITE:
 				{
-					if (t_record->content_.AcquireLock(start_timestamp_, LockType::WRITE_LOCK, &lock_ready) == false) {
-						this->AbortTransaction();
+					if (t_record->wait_content_.AcquireLock(start_timestamp_, LockType::WRITE_LOCK, &lock_ready) == false) {
+						this->AbortTransaction(context);
 						return false;
 					} else {
 						BEGIN_CC_WAIT_TIME_MEASURE(thread_id_);
@@ -98,32 +108,78 @@ namespace Cavalia{
 						access->access_record_ = t_record;
 						access->local_record_ = local_record;
 						access->table_id_ = table_id;
-						access->timestamp_ = t_record->content_.GetTimestamp();
+						access->timestamp_ = t_record->wait_content_.GetTimestamp();
 						return true;
 					}
 				}
 				case DELETE_ONLY: 
 				{
-					if (t_record->content_.AcquireLock(start_timestamp_, LockType::WRITE_LOCK, &lock_ready) == false) {
-						this->AbortTransaction();
+					if (t_record->wait_content_.AcquireLock(start_timestamp_, LockType::WRITE_LOCK, &lock_ready) == false) {
+						this->AbortTransaction(context);
 						return false;
 					} else {
+						BEGIN_CC_WAIT_TIME_MEASURE(thread_id_);
+						while (!lock_ready);
+						END_CC_WAIT_TIME_MEASURE(thread_id_);
 						t_record->record_->is_visible_ = false;
 						Access *access = access_list_.NewAccess();
 						access->access_type_ = DELETE_ONLY;
 						access->access_record_ = t_record;
 						access->local_record_ = NULL;
 						access->table_id_ = table_id;
-						access->timestamp_ = t_record->content_.GetTimestamp();
+						access->timestamp_ = t_record->wait_content_.GetTimestamp();
 						return true;
 					}
 				}
+				#if defined(SELECTIVE_CC)
+					case NO_CC_READ_ONLY: 
+					{
+						Access *access = access_list_.NewAccess();
+						access->access_type_ = NO_CC_READ_ONLY;
+						access->access_record_ = t_record;
+						access->local_record_ = NULL;
+						access->table_id_ = table_id;
+						access->timestamp_ = t_record->content_.GetTimestamp();
+						return true;
+					}
+					case NO_CC_READ_WRITE:
+					{
+						const RecordSchema *schema_ptr = t_record->record_->schema_ptr_;
+						char *local_data = MemAllocator::Alloc(schema_ptr->GetSchemaSize());
+						SchemaRecord *local_record = (SchemaRecord*)MemAllocator::Alloc(sizeof(SchemaRecord));
+						new(local_record)SchemaRecord(schema_ptr, local_data);
+						t_record->record_->CopyTo(local_record);
+						Access *access = access_list_.NewAccess();
+						access->access_type_ = NO_CC_READ_WRITE;
+						access->access_record_ = t_record;
+						access->local_record_ = local_record;
+						access->table_id_ = table_id;
+						access->timestamp_ = t_record->content_.GetTimestamp();
+						return true;
+					}
+					case NO_CC_DELETE_ONLY: 
+					{
+						t_record->record_->is_visible_ = false;
+						Access *access = access_list_.NewAccess();
+						access->access_type_ = NO_CC_DELETE_ONLY;
+						access->access_record_ = t_record;
+						access->local_record_ = NULL;
+						access->table_id_ = table_id;
+						access->timestamp_ = t_record->content_.GetTimestamp();
+						return true;
+					}
+				#endif
 				default:
 					break;
 			}
 		}
 
-		bool TransactionManager::CommitTransaction(TxnContext *context, TxnParam *param, CharArray &ret_str){
+		#if defined(DYNAMIC_CC)
+			CC_COMMIT_FUNCTION_HEADER_SPECIFIED(LockWait)
+		#else
+			bool TransactionManager::CommitTransaction(TxnContext *context, TxnParam *param, CharArray &ret_str) 
+		#endif
+		{
 			BEGIN_PHASE_MEASURE(thread_id_, COMMIT_PHASE);
 
 			BEGIN_CC_TS_ALLOC_TIME_MEASURE(thread_id_);
@@ -144,7 +200,7 @@ namespace Cavalia{
 
 			for (size_t i = 0; i < access_list_.access_count_; ++i){
 				Access *access_ptr = access_list_.GetAccess(i);
-				auto &content_ref = access_ptr->access_record_->content_;
+				auto &content_ref = access_ptr->access_record_->wait_content_;
 				switch(access_ptr->access_type_) {
 					case READ_WRITE:
 					case INSERT_ONLY:
@@ -152,6 +208,14 @@ namespace Cavalia{
 						assert(commit_ts >= access_ptr->timestamp_);
 						content_ref.SetTimestamp(commit_ts);
 						break;
+					#if defined(SELECTIVE_CC)
+						case NO_CC_READ_WRITE:
+						case NO_CC_INSERT_ONLY:
+						case NO_CC_DELETE_ONLY:
+							assert(commit_ts >= access_ptr->timestamp_);
+							content_ref.SetTimestamp(commit_ts);
+							break;
+					#endif
 					default:
 						break;
 				}
@@ -173,12 +237,12 @@ namespace Cavalia{
 				switch(access_ptr->access_type_) {
 					case READ_ONLY: 
 					{
-						access_ptr->access_record_->content_.ReleaseLock(start_timestamp_);
+						access_ptr->access_record_->wait_content_.ReleaseLock(start_timestamp_);
 						break;
 					}
 					case READ_WRITE: 
 					{
-						access_ptr->access_record_->content_.ReleaseLock(start_timestamp_);
+						access_ptr->access_record_->wait_content_.ReleaseLock(start_timestamp_);
 						MemAllocator::Free(access_ptr->local_record_->data_ptr_);
 						access_ptr->local_record_->~SchemaRecord();
 						MemAllocator::Free((char*)access_ptr->local_record_);
@@ -186,9 +250,21 @@ namespace Cavalia{
 					}
 					case DELETE_ONLY:
 					{
-						access_ptr->access_record_->content_.ReleaseLock(start_timestamp_);
+						access_ptr->access_record_->wait_content_.ReleaseLock(start_timestamp_);
 						break;
-					}	
+					}
+					#if defined(SELECTIVE_CC)
+						case NO_CC_READ_WRITE:
+						{
+							MemAllocator::Free(access_ptr->local_record_->data_ptr_);
+							access_ptr->local_record_->~SchemaRecord();
+							MemAllocator::Free((char*)access_ptr->local_record_);
+							break;
+						}
+						case NO_CC_READ_ONLY:
+						case NO_CC_DELETE_ONLY:
+							break;
+					#endif
 					default:
 						break;
 				}
@@ -200,20 +276,25 @@ namespace Cavalia{
 			return true;
 		}
 
-		void TransactionManager::AbortTransaction() {
+		#if defined(DYNAMIC_CC)
+			CC_ABORT_FUNCTION_HEADER_SPECIFIED(LockWait)
+		#else
+			void TransactionManager::AbortTransaction(TxnContext* context) 
+		#endif
+		{
 			// recover updated data and release locks.
 			for (size_t i = 0; i < access_list_.access_count_; ++i){
 				Access *access_ptr = access_list_.GetAccess(i);
 				switch(access_ptr->access_type_) {
 					case READ_ONLY: 
 					{
-						access_ptr->access_record_->content_.ReleaseLock(start_timestamp_);
+						access_ptr->access_record_->wait_content_.ReleaseLock(start_timestamp_);
 						break;
 					}
 					case READ_WRITE: 
 					{
+						access_ptr->access_record_->wait_content_.ReleaseLock(start_timestamp_);
 						access_ptr->access_record_->record_->CopyFrom(access_ptr->local_record_);
-						access_ptr->access_record_->content_.ReleaseLock(start_timestamp_);
 						MemAllocator::Free(access_ptr->local_record_->data_ptr_);
 						access_ptr->local_record_->~SchemaRecord();
 						MemAllocator::Free((char*)access_ptr->local_record_);
@@ -222,16 +303,36 @@ namespace Cavalia{
 					case INSERT_ONLY: 
 					{
 						access_ptr->access_record_->record_->is_visible_ = false;
-						//access_ptr->access_record_->content_.ReleaseLock(start_timestamp_);
 						break;
 					}
 					case DELETE_ONLY: 
 					{
-						assert(false);
 						access_ptr->access_record_->record_->is_visible_ = true;
-						access_ptr->access_record_->content_.ReleaseLock(start_timestamp_);
+						access_ptr->access_record_->wait_content_.ReleaseLock(start_timestamp_);
 						break;
 					}
+					#if defined(SELECTIVE_CC)
+						case NO_CC_READ_WRITE:
+						{
+							access_ptr->access_record_->record_->CopyFrom(access_ptr->local_record_);
+							MemAllocator::Free(access_ptr->local_record_->data_ptr_);
+							access_ptr->local_record_->~SchemaRecord();
+							MemAllocator::Free((char*)access_ptr->local_record_);
+							break;
+						}
+						case NO_CC_DELETE_ONLY:
+						{
+							access_ptr->access_record_->record_->is_visible_ = true;
+							break;
+						}
+						case NO_CC_INSERT_ONLY: 
+						{
+							access_ptr->access_record_->record_->is_visible_ = false;
+							break;
+						}
+						case NO_CC_READ_ONLY:
+							break;
+					#endif
 					default:
 						break;
 				}

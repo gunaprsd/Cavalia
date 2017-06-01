@@ -18,13 +18,35 @@
 #include "GlobalTimestamp.h"
 #include "BatchTimestamp.h"
 #include "Epoch.h"
+
+//macro programming
+#define CC_INSERT_FUNCTION(NAME) InsertRecord_ ## NAME
+#define CC_SELECT_FUNCTION(NAME) SelectRecordCC_ ## NAME
+#define CC_COMMIT_FUNCTION(NAME) CommitTransaction_ ## NAME
+#define CC_ABORT_FUNCTION(NAME) AbortTransaction_ ## NAME
+
+#define CC_INSERT_FUNCTION_HEADER(NAME) bool CC_INSERT_FUNCTION(NAME) (TxnContext *context, const size_t &table_id, const std::string &primary_key, SchemaRecord *record)
+#define CC_SELECT_FUNCTION_HEADER(NAME) bool CC_SELECT_FUNCTION(NAME) (TxnContext *context, const size_t &table_id, TableRecord *t_record, SchemaRecord *&s_record, const AccessType access_type)
+#define CC_COMMIT_FUNCTION_HEADER(NAME) bool CC_COMMIT_FUNCTION(NAME) (TxnContext *context, TxnParam *param, CharArray &ret_str)
+#define CC_ABORT_FUNCTION_HEADER(NAME) void CC_ABORT_FUNCTION(NAME) (TxnContext *context)
+
+#define CC_INSERT_FUNCTION_HEADER_SPECIFIED(NAME) bool TransactionManager::InsertRecord_ ## NAME (TxnContext *context, const size_t &table_id, const std::string &primary_key, SchemaRecord *record)
+#define CC_SELECT_FUNCTION_HEADER_SPECIFIED(NAME) bool TransactionManager::SelectRecordCC_ ## NAME (TxnContext *context, const size_t &table_id, TableRecord *t_record, SchemaRecord *&s_record, const AccessType access_type)
+#define CC_COMMIT_FUNCTION_HEADER_SPECIFIED(NAME) bool TransactionManager::CommitTransaction_ ## NAME (TxnContext *context, TxnParam *param, CharArray &ret_str)
+#define CC_ABORT_FUNCTION_HEADER_SPECIFIED(NAME) void TransactionManager::AbortTransaction_ ## NAME (TxnContext *context)
+
+#define CC_FUNCTION_HEADERS(NAME) \
+CC_INSERT_FUNCTION_HEADER(NAME); \
+CC_SELECT_FUNCTION_HEADER(NAME); \
+CC_COMMIT_FUNCTION_HEADER(NAME); \
+CC_ABORT_FUNCTION_HEADER(NAME); \
+
 #if defined(DBX) || defined(RTM) || defined(OCC_RTM) || defined(LOCK_RTM)
 #include <RtmLock.h>
 #endif
 
 namespace Cavalia{
 	namespace Database{
-
 		class TransactionManager{
 		public:
 			// for executors
@@ -149,7 +171,7 @@ namespace Cavalia{
 			}
 
 			bool CommitTransaction(TxnContext *context, TxnParam *param, CharArray &ret_str);
-			void AbortTransaction();
+			void AbortTransaction(TxnContext *context);
 
 			void CleanUp(){
 #if defined(VALUE_LOGGING) || defined(COMMAND_LOGGING)
@@ -169,6 +191,11 @@ namespace Cavalia{
 				}
 				return true;
 			}
+
+			#if defined(DYNAMIC_CC)
+				CC_FUNCTION_HEADERS(LockWait)
+				CC_FUNCTION_HEADERS(Occ)
+			#endif
 
 			uint64_t GenerateScalableTimestamp(const uint64_t &curr_epoch, const uint64_t &max_rw_ts){
 				uint64_t max_global_ts = max_rw_ts >> 32;

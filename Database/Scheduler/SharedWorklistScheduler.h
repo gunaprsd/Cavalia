@@ -6,6 +6,7 @@
 #include <AllocatorHelper.h>
 #include "../Redirector/IORedirector.h"
 #include "../Transaction/StoredProcedure.h"
+#include "../Transaction/TxnContext.h"
 #include "../Storage/BaseStorageManager.h"
 #include "../Logger/BaseLogger.h"
 #include "../Profiler/BatchSyncTimeProfiler.h"

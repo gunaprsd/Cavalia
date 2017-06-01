@@ -99,7 +99,10 @@ SimpleConcurrentWorklist* SharedWorklistScheduler::DoDataBasedPartition(int batc
     }
 
     size_t num_txns = clusters.size();
-    
+    size_t num_items = batch_rw_set.lookup_.size();
+    size_t num_contention_items = 0;
+    double average_contention = 0.0, contention_ratio = 0.0;
+
     std::unordered_set<BatchAccessInfo*> interesting_items;
     size_t max_progress = 0;
     /* Step 2: Collect all interesting data items. Interesting data
@@ -112,6 +115,9 @@ SimpleConcurrentWorklist* SharedWorklistScheduler::DoDataBasedPartition(int batc
             max_progress = std::max(max_progress, info->txns_.size());
         } else if(size == 1) {
             info->avoid_cc_ = true;
+        } else if(size >= MAX_ATOMIC_BATCH_SIZE) {
+            num_contention_items++;
+            average_contention += size;
         }
     }
 
@@ -161,12 +167,29 @@ SimpleConcurrentWorklist* SharedWorklistScheduler::DoDataBasedPartition(int batc
                 interesting_items.erase(info);
             } else {
                 //remove from interesting items so that we don't get it again
+                average_contention += resulting_cluster_size;
                 interesting_items.erase(info);
+                num_contention_items++;
             }
         }
         progress++;
     }
-    
+
+    ConcurrencyControlType type;
+    if(num_contention_items > 0) {
+        average_contention /= num_contention_items;
+        contention_ratio = (double)num_contention_items / (double)num_items;
+        if(contention_ratio < 0.2 && average_contention < 25) {
+            type = CC_OCC;
+            std::cout << "batch idx : " << batch_idx << " cc : OCC" << std::endl;
+        } else {
+            type = CC_LOCK_WAIT;
+            std::cout << "batch idx : " << batch_idx << " cc : 2PL" << std::endl;
+        }
+    } else {
+         type = CC_OCC;
+        std::cout << "batch idx : " << batch_idx <<" cc : OCC" << std::endl;
+    } 
 
     /* Step 4: now we use the produced clusters to partition the super-batch into 
     atomic-batches of size atmost MAX_ATOMIC_BATCH_SIZE. Here we greedily fill the
@@ -183,6 +206,7 @@ SimpleConcurrentWorklist* SharedWorklistScheduler::DoDataBasedPartition(int batc
         bool can_add_in_same_batch = (current_batch_size + size_of_cluster) < MAX_ATOMIC_BATCH_SIZE;
 
         if(!can_add_in_same_batch) {
+            current_batch->cc_type_ = type;
             wl->Add(current_batch);
             current_batch = new ParamBatch(MAX_ATOMIC_BATCH_SIZE);
             current_batch_size = 0;
@@ -201,6 +225,7 @@ SimpleConcurrentWorklist* SharedWorklistScheduler::DoDataBasedPartition(int batc
         }
     }
     //adding last batch
+    current_batch->cc_type_ = type;
     wl->Add(current_batch);
     return wl;
 }

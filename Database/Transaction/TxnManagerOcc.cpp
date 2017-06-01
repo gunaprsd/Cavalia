@@ -1,4 +1,4 @@
-#if defined(OCC)
+#if defined(OCC) || defined(DYNAMIC_CC)
 #include "TransactionManager.h"
 
 namespace Cavalia {
@@ -17,7 +17,12 @@ namespace Cavalia {
 		*/
 
 		
-		bool TransactionManager::InsertRecord(TxnContext *context, const size_t &table_id, const std::string &primary_key, SchemaRecord *record) {
+		#if defined(DYNAMIC_CC)
+			CC_INSERT_FUNCTION_HEADER_SPECIFIED(Occ)
+		#else 
+			bool TransactionManager::InsertRecord(TxnContext *context, const size_t &table_id, const std::string &primary_key, SchemaRecord *record) 
+		#endif
+		{
 			BEGIN_PHASE_MEASURE(thread_id_, INSERT_PHASE);
 			// insert with visibility bit set to false.
 			record->is_visible_ = false;
@@ -32,7 +37,12 @@ namespace Cavalia {
 			return true;
 		}
 
-		bool TransactionManager::SelectRecordCC(TxnContext *context, const size_t &table_id, TableRecord *t_record, SchemaRecord *&s_record, const AccessType access_type) {
+		#if defined(DYNAMIC_CC)
+			CC_SELECT_FUNCTION_HEADER_SPECIFIED(Occ)
+		#else
+			bool TransactionManager::SelectRecordCC(TxnContext *context, const size_t &table_id, TableRecord *t_record, SchemaRecord *&s_record, const AccessType access_type) 
+		#endif
+		{
 			switch(access_type) {
 				case READ_ONLY: 
 				{
@@ -78,6 +88,52 @@ namespace Cavalia {
 					s_record = t_record->record_;
 					return true;
 				}
+				#if defined(SELECTIVE_CC) 
+					case NO_CC_READ_ONLY: 
+					{
+						Access *access = access_list_.NewAccess();
+						access->access_type_ = READ_ONLY;
+						access->access_record_ = t_record;
+						access->local_record_ = NULL;
+						access->table_id_ = table_id;
+						access->timestamp_ = t_record->content_.GetTimestamp();
+						s_record = t_record->record_;
+						return true;
+					}
+					case NO_CC_READ_WRITE: 
+					{
+						Access *access = access_list_.NewAccess();
+						access->access_type_ = READ_WRITE;
+						access->access_record_ = t_record;
+						// copy data
+						BEGIN_CC_MEM_ALLOC_TIME_MEASURE(thread_id_);
+						const RecordSchema *schema_ptr = t_record->record_->schema_ptr_;
+						char *local_data = MemAllocator::Alloc(schema_ptr->GetSchemaSize());
+						SchemaRecord *local_record = (SchemaRecord*)MemAllocator::Alloc(sizeof(SchemaRecord));
+						new(local_record)SchemaRecord(schema_ptr, local_data);
+						END_CC_MEM_ALLOC_TIME_MEASURE(thread_id_);
+						access->timestamp_ = t_record->content_.GetTimestamp();
+						COMPILER_MEMORY_FENCE;
+						local_record->CopyFrom(t_record->record_);
+						access->local_record_ = local_record;
+						access->table_id_ = table_id;
+						// reset returned record.
+						s_record = local_record;
+						return true;
+					}
+					// we just need to set the visibility bit on the record. so no need to create local copy.
+					case NO_CC_DELETE_ONLY: 
+					{
+						Access *access = access_list_.NewAccess();
+						access->access_type_ = DELETE_ONLY;
+						access->access_record_ = t_record;
+						access->local_record_ = NULL;
+						access->table_id_ = table_id;
+						access->timestamp_ = t_record->content_.GetTimestamp();
+						s_record = t_record->record_;
+						return true;
+					}
+				#endif
 				default: 
 				{
 					assert(false);
@@ -86,7 +142,12 @@ namespace Cavalia {
 			}
 		}
 
-		bool TransactionManager::CommitTransaction(TxnContext *context, TxnParam *param, CharArray &ret_str) {
+		#if defined(DYNAMIC_CC)
+			CC_COMMIT_FUNCTION_HEADER_SPECIFIED(Occ)
+		#else
+			bool TransactionManager::CommitTransaction(TxnContext *context, TxnParam *param, CharArray &ret_str) 
+		#endif
+		{
 			bool is_success = true;
 			size_t lock_count = 0;
 			BEGIN_PHASE_MEASURE(thread_id_, COMMIT_PHASE);
@@ -125,6 +186,13 @@ namespace Cavalia {
 							content_ref.AcquireWriteLock();
 							break;
 						}
+						#if defined(SELECTIVE_CC)
+							case NO_CC_READ_ONLY:
+							case NO_CC_READ_WRITE:
+							case NO_CC_INSERT_ONLY:
+							case NO_CC_DELETE_ONLY:
+								break;
+						#endif
 						default:
 						{
 							assert(false);
@@ -159,6 +227,9 @@ namespace Cavalia {
 					SchemaRecord *local_record_ptr = access_ptr->local_record_;
 					auto &content_ref = access_ptr->access_record_->content_;
 					switch(access_ptr->access_type_) {
+						#if defined(SELECTIVE_CC)
+							case NO_CC_READ_WRITE:
+						#endif
 						case READ_WRITE: 
 						{
 							assert(commit_ts > access_ptr->timestamp_);
@@ -167,6 +238,9 @@ namespace Cavalia {
 							content_ref.SetTimestamp(commit_ts);
 							break;
 						}
+						#if defined(SELECTIVE_CC)
+							case NO_CC_INSERT_ONLY:
+						#endif
 						case INSERT_ONLY: 
 						{
 							assert(commit_ts > access_ptr->timestamp_);
@@ -175,6 +249,9 @@ namespace Cavalia {
 							content_ref.SetTimestamp(commit_ts);
 							break;
 						}
+						#if defined(SELECTIVE_CC)
+							case NO_CC_DELETE_ONLY:
+						#endif
 						case DELETE_ONLY: 
 						{
 							assert(commit_ts > access_ptr->timestamp_);
@@ -209,7 +286,8 @@ namespace Cavalia {
 							access_ptr->access_record_->content_.ReleaseReadLock();
 							break;
 						}
-						case READ_WRITE: {
+						case READ_WRITE: 
+						{
 							access_ptr->access_record_->content_.ReleaseWriteLock();
 							BEGIN_CC_MEM_ALLOC_TIME_MEASURE(thread_id_);
 							SchemaRecord *local_record_ptr = access_ptr->local_record_;
@@ -225,6 +303,24 @@ namespace Cavalia {
 							access_ptr->access_record_->content_.ReleaseWriteLock();
 							break;
 						}
+						#if defined(SELECTIVE_CC)
+							case NO_CC_READ_WRITE: 
+							{
+								BEGIN_CC_MEM_ALLOC_TIME_MEASURE(thread_id_);
+								SchemaRecord *local_record_ptr = access_ptr->local_record_;
+								MemAllocator::Free(local_record_ptr->data_ptr_);
+								local_record_ptr->~SchemaRecord();
+								MemAllocator::Free((char*)local_record_ptr);
+								END_CC_MEM_ALLOC_TIME_MEASURE(thread_id_);
+								break;
+							}
+							case NO_CC_INSERT_ONLY:
+							case NO_CC_DELETE_ONLY: 
+							case NO_CC_READ_ONLY: 
+								break;
+						#endif
+						default:
+							break;
 					}
 				}
 				assert(access_list_.access_count_ <= kMaxAccessNum);
@@ -235,7 +331,12 @@ namespace Cavalia {
 			return is_success;
 		}
 
-		void TransactionManager::AbortTransaction() {
+		#if defined(DYNAMIC_CC)
+			CC_ABORT_FUNCTION_HEADER_SPECIFIED(Occ)
+		#else
+			void TransactionManager::AbortTransaction(TxnContext* context) 
+		#endif
+		{
 			assert(false);
 		}
 	}
