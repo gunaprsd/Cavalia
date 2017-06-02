@@ -49,7 +49,11 @@ void SharedWorklistScheduler::ThreadRun() {
     BEGIN_PARTITIONING_TIME_MEASURE(0);
     size_t num_batches = raw_batches_[0]->size();
     for(int batch_idx = 0; batch_idx < num_batches; batch_idx++) {
-        batches_.push_back(DoDataBasedPartition(batch_idx));
+        #if defined(SELECTIVE_CC)
+            batches_.push_back(DoDataBasedPartition(batch_idx));
+        #else
+            batches_.push_back(DoSimplePartition(batch_idx));
+        #endif
     }
     END_PARTITIONING_TIME_MEASURE(0);
 
@@ -175,21 +179,23 @@ SimpleConcurrentWorklist* SharedWorklistScheduler::DoDataBasedPartition(int batc
         progress++;
     }
 
-    ConcurrencyControlType type;
-    if(num_contention_items > 0) {
-        average_contention /= num_contention_items;
-        contention_ratio = (double)num_contention_items / (double)num_items;
-        if(contention_ratio < 0.2 && average_contention < 25) {
-            type = CC_OCC;
-            std::cout << "batch idx : " << batch_idx << " cc : OCC" << std::endl;
+    #if defined(DYNAMIC_CC)
+        ConcurrencyControlType type;
+        if(num_contention_items > 0) {
+            average_contention /= num_contention_items;
+            contention_ratio = (double)num_contention_items / (double)num_items;
+            if(contention_ratio < 0.2 && average_contention < 25) {
+                type = CC_OCC;
+                std::cout << "batch idx : " << batch_idx << " cc : OCC" << std::endl;
+            } else {
+                type = CC_LOCK_WAIT;
+                std::cout << "batch idx : " << batch_idx << " cc : 2PL" << std::endl;
+            }
         } else {
-            type = CC_LOCK_WAIT;
-            std::cout << "batch idx : " << batch_idx << " cc : 2PL" << std::endl;
-        }
-    } else {
-         type = CC_OCC;
-        std::cout << "batch idx : " << batch_idx <<" cc : OCC" << std::endl;
-    } 
+            type = CC_OCC;
+            std::cout << "batch idx : " << batch_idx <<" cc : OCC" << std::endl;
+        } 
+    #endif
 
     /* Step 4: now we use the produced clusters to partition the super-batch into 
     atomic-batches of size atmost MAX_ATOMIC_BATCH_SIZE. Here we greedily fill the
@@ -206,7 +212,9 @@ SimpleConcurrentWorklist* SharedWorklistScheduler::DoDataBasedPartition(int batc
         bool can_add_in_same_batch = (current_batch_size + size_of_cluster) < MAX_ATOMIC_BATCH_SIZE;
 
         if(!can_add_in_same_batch) {
+            #if defined(DYNAMIC_CC)
             current_batch->cc_type_ = type;
+            #endif
             wl->Add(current_batch);
             current_batch = new ParamBatch(MAX_ATOMIC_BATCH_SIZE);
             current_batch_size = 0;
@@ -225,7 +233,9 @@ SimpleConcurrentWorklist* SharedWorklistScheduler::DoDataBasedPartition(int batc
         }
     }
     //adding last batch
+    #if defined(DYNAMIC_CC)
     current_batch->cc_type_ = type;
+    #endif
     wl->Add(current_batch);
     return wl;
 }

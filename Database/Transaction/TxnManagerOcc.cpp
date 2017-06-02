@@ -102,6 +102,7 @@ namespace Cavalia {
 					}
 					case NO_CC_READ_WRITE: 
 					{
+						//no need to have a compiler fence
 						Access *access = access_list_.NewAccess();
 						access->access_type_ = READ_WRITE;
 						access->access_record_ = t_record;
@@ -112,9 +113,9 @@ namespace Cavalia {
 						SchemaRecord *local_record = (SchemaRecord*)MemAllocator::Alloc(sizeof(SchemaRecord));
 						new(local_record)SchemaRecord(schema_ptr, local_data);
 						END_CC_MEM_ALLOC_TIME_MEASURE(thread_id_);
-						access->timestamp_ = t_record->content_.GetTimestamp();
-						COMPILER_MEMORY_FENCE;
 						local_record->CopyFrom(t_record->record_);
+						COMPILER_MEMORY_FENCE
+						access->timestamp_ = t_record->content_.GetTimestamp();
 						access->local_record_ = local_record;
 						access->table_id_ = table_id;
 						// reset returned record.
@@ -227,9 +228,6 @@ namespace Cavalia {
 					SchemaRecord *local_record_ptr = access_ptr->local_record_;
 					auto &content_ref = access_ptr->access_record_->content_;
 					switch(access_ptr->access_type_) {
-						#if defined(SELECTIVE_CC)
-							case NO_CC_READ_WRITE:
-						#endif
 						case READ_WRITE: 
 						{
 							assert(commit_ts > access_ptr->timestamp_);
@@ -238,9 +236,6 @@ namespace Cavalia {
 							content_ref.SetTimestamp(commit_ts);
 							break;
 						}
-						#if defined(SELECTIVE_CC)
-							case NO_CC_INSERT_ONLY:
-						#endif
 						case INSERT_ONLY: 
 						{
 							assert(commit_ts > access_ptr->timestamp_);
@@ -249,9 +244,6 @@ namespace Cavalia {
 							content_ref.SetTimestamp(commit_ts);
 							break;
 						}
-						#if defined(SELECTIVE_CC)
-							case NO_CC_DELETE_ONLY:
-						#endif
 						case DELETE_ONLY: 
 						{
 							assert(commit_ts > access_ptr->timestamp_);
@@ -260,6 +252,32 @@ namespace Cavalia {
 							content_ref.SetTimestamp(commit_ts);
 							break;
 						}
+						#if defined(SELECTIVE_CC)
+							case NO_CC_READ_WRITE: 
+							{
+								assert(commit_ts > access_ptr->timestamp_);
+								global_record_ptr->CopyFrom(local_record_ptr);
+								COMPILER_MEMORY_FENCE
+								content_ref.SetTimestamp(commit_ts);
+								break;
+							}
+							case NO_CC_INSERT_ONLY: 
+							{
+								assert(commit_ts > access_ptr->timestamp_);
+								global_record_ptr->is_visible_ = true;
+								COMPILER_MEMORY_FENCE
+								content_ref.SetTimestamp(commit_ts);
+								break;
+							}
+							case NO_CC_DELETE_ONLY: 
+							{
+								assert(commit_ts > access_ptr->timestamp_);
+								global_record_ptr->is_visible_ = false;
+								COMPILER_MEMORY_FENCE
+								content_ref.SetTimestamp(commit_ts);
+								break;
+							}
+						#endif
 						default:
 							break;
 					}
