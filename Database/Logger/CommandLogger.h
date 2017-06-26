@@ -58,7 +58,7 @@ namespace Cavalia {
 				size_t txn_offset = sizeof(size_t)+sizeof(uint64_t)+sizeof(size_t);
 				for (size_t i = 0; i < access_list.access_count_; ++i){
 					Access *access_ptr = access_list.GetAccess(i);
-					if (access_ptr->access_type_ == READ_WRITE){
+					if (access_ptr->access_type_ == READ_WRITE || access_ptr->access_type_ == NO_CC_READ_WRITE){
 						SchemaRecord *local_record_ptr = access_ptr->local_record_;
 						size_t record_size = local_record_ptr->schema_ptr_->GetSchemaSize();
 						memcpy(curr_buffer_ptr + txn_offset, (char*)(&kUpdate), sizeof(uint8_t));
@@ -67,7 +67,7 @@ namespace Cavalia {
 						memcpy(curr_buffer_ptr + txn_offset + sizeof(uint8_t)+sizeof(size_t)+sizeof(size_t), local_record_ptr->data_ptr_, record_size);
 						txn_offset += sizeof(uint8_t)+sizeof(size_t)+sizeof(size_t)+record_size;
 					}
-					else if (access_ptr->access_type_ == INSERT_ONLY){
+					else if (access_ptr->access_type_ == INSERT_ONLY || access_ptr->access_type_ == NO_CC_INSERT_ONLY){
 						SchemaRecord *global_record_ptr = access_ptr->access_record_->record_;
 						size_t record_size = global_record_ptr->schema_ptr_->GetSchemaSize();
 						memcpy(curr_buffer_ptr + txn_offset, (char*)(&kInsert), sizeof(uint8_t));
@@ -76,7 +76,7 @@ namespace Cavalia {
 						memcpy(curr_buffer_ptr + txn_offset + sizeof(uint8_t)+sizeof(size_t)+sizeof(size_t), global_record_ptr->data_ptr_, record_size);
 						txn_offset += sizeof(uint8_t)+sizeof(size_t)+sizeof(size_t)+record_size;
 					}
-					else if (access_ptr->access_type_ == DELETE_ONLY){
+					else if (access_ptr->access_type_ == DELETE_ONLY || access_ptr->access_type_ == NO_CC_DELETE_ONLY){
 						SchemaRecord *local_record_ptr = access_ptr->local_record_;
 						std::string primary_key = local_record_ptr->GetPrimaryKey();
 						size_t key_size = primary_key.size();

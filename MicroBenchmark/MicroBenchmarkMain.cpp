@@ -36,13 +36,13 @@ int main(int argc, char *argv[]) {
 		//scale_factors[0] = sf, scale_factors[1] = theta for zipfian distribution
 		//Database size is sf * 1M records
 		MicroScaleParams params(scale_factors[0], scale_factors[1]);
+		
 		BaseLogger *logger = NULL;
-#if defined(COMMAND_LOGGING)
-		ENABLE_COMMAND_LOGGER(Micro, dir_name, num_core);
-#endif
-#if defined(VALUE_LOGGING)
-		ENABLE_VALUE_LOGGER(Micro, dir_name, num_core);
-#endif
+		#if defined(COMMAND_LOGGING)
+			ENABLE_COMMAND_LOGGER(Micro, dir_name, num_core);
+		#elif defined(VALUE_LOGGING)
+			ENABLE_VALUE_LOGGER(Micro, dir_name, num_core);
+		#endif
 		
 		IORedirector io_redirector(num_core);
 		SET_SOURCE(Micro, dir_name, num_txn, dist_ratio);

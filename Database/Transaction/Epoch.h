@@ -6,7 +6,7 @@
 #include <boost/thread.hpp>
 
 #if defined(__linux__)
-#define COMPILER_MEMORY_FENCE asm volatile("" ::: "memory")
+#define COMPILER_MEMORY_FENCE asm volatile("" ::: "memory");
 #else
 #define COMPILER_MEMORY_FENCE
 #endif

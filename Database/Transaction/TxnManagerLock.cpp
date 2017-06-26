@@ -109,12 +109,13 @@ namespace Cavalia{
 					}
 					case NO_CC_READ_WRITE:
 					{
-						//do we necessarily need a local copy?
+						//do we necessarily need a local copy? yes, because a transaction might abort after some modifications.
 						const RecordSchema *schema_ptr = t_record->record_->schema_ptr_;
 						char *local_data = MemAllocator::Alloc(schema_ptr->GetSchemaSize());
 						SchemaRecord *local_record = (SchemaRecord*)MemAllocator::Alloc(sizeof(SchemaRecord));
 						new(local_record)SchemaRecord(schema_ptr, local_data);
 						t_record->record_->CopyTo(local_record);
+						
 						Access *access = access_list_.NewAccess();
 						access->access_type_ = NO_CC_READ_WRITE;
 						access->access_record_ = t_record;

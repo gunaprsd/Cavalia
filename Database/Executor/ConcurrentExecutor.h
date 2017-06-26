@@ -21,7 +21,9 @@
 #include <RtmLock.h>
 #endif
 
+#if defined(DYNAMIC_CC)
 #define SHARED_WORKLIST_SCHEDULER
+#endif
 
 namespace Cavalia{
 	namespace Database{

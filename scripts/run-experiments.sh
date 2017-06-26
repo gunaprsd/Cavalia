@@ -1,11 +1,16 @@
-FILENAME="results_16w.txt"
-printf "Experiments with 16 workers for varying theta" > $FILENAME
-for THETA in 0.1 0.3 0.5 0.7 0.9 1.2 
+FOLDER="/home/guna/results/experiments-6-8-17"
+FILENAME="$FOLDER/occ.txt"
+HUNDRED_MILLION=100000000
+touch $FILENAME
+echo "Concurrency Protocol: OCC\n" > $FILENAME
+for THETA in 0.3 1.2
 do 
-    printf "\n\nTheta : $THETA\n\n" >> $FILENAME
-    for RUN in 1 2 3 4 5
+    for NUM_WORKERS in 4 8 16 32 48 64
     do 
-        printf "\nTheta : $THETA, Run : $RUN\n" >> $FILENAME
-        ./micro_benchmark -a2 -sf10 -sf$THETA -t10000000 -c16 >> $FILENAME
+        for RUN in 1 2 3
+        do
+            printf "\nTheta : $THETA, Run : $RUN\n" >> $FILENAME
+            ./micro_benchmark -a2 -sf10 -sf$THETA -t$HUNDRED_MILLION -c$NUM_WORKERS >> $FILENAME
+        done
     done
 done

@@ -234,7 +234,7 @@ SimpleConcurrentWorklist* SharedWorklistScheduler::DoDataBasedPartition(int batc
     }
     //adding last batch
     #if defined(DYNAMIC_CC)
-    current_batch->cc_type_ = type;
+        current_batch->cc_type_ = type;
     #endif
     wl->Add(current_batch);
     return wl;

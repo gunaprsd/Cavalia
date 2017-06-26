@@ -15,48 +15,47 @@ namespace Cavalia{
 			virtual void CommitTransaction(const size_t &thread_id, const uint64_t &epoch, const uint64_t &commit_ts, AccessList<kMaxAccessNum> &access_list){
 				ThreadLogBuffer *tlb_ptr = thread_log_buffer_[thread_id];
 				size_t &buffer_offset_ref = tlb_ptr->buffer_offset_;
-				if (tlb_ptr->last_epoch_ == -1){
+				if (tlb_ptr->last_epoch_ == -1) {
 					tlb_ptr->last_epoch_ = epoch;
-				}
-				else if (tlb_ptr->last_epoch_ != epoch){
-					//@guna changed: assert(tlb_ptr->last_epoch_ + 1 == epoch);
+				} else if (tlb_ptr->last_epoch_ != epoch) {
+					assert(tlb_ptr->last_epoch_ < epoch);
 					FILE *file_ptr = outfiles_[thread_id];
 					int result;
 					// record epoch.
 					result = fwrite(&tlb_ptr->last_epoch_, sizeof(uint64_t), 1, file_ptr);
 					assert(result == 1);
 					tlb_ptr->last_epoch_ = epoch;
-#if defined(COMPRESSION)
-					char *compressed_buffer_ptr = tlb_ptr->compressed_buffer_ptr_;
-					size_t bound = LZ4F_compressFrameBound(buffer_offset_ref, NULL);
-					size_t n = LZ4F_compressFrame(compressed_buffer_ptr, bound, tlb_ptr->buffer_ptr_, buffer_offset_ref, NULL);
-					assert(LZ4F_isError(n) == false);
+					#if defined(COMPRESSION)
+						char *compressed_buffer_ptr = tlb_ptr->compressed_buffer_ptr_;
+						size_t bound = LZ4F_compressFrameBound(buffer_offset_ref, NULL);
+						size_t n = LZ4F_compressFrame(compressed_buffer_ptr, bound, tlb_ptr->buffer_ptr_, buffer_offset_ref, NULL);
+						assert(LZ4F_isError(n) == false);
 
-					// after compression, write into file
-					result = fwrite(&n, sizeof(size_t), 1, file_ptr);
-					assert(result == 1);
-					result = fwrite(compressed_buffer_ptr, sizeof(char), n, file_ptr);
-					assert(result == n);
-#else
-					result = fwrite(&buffer_offset_ref, sizeof(size_t), 1, file_ptr);
-					assert(result == 1);
-					result = fwrite(tlb_ptr->buffer_ptr_, sizeof(char), buffer_offset_ref, file_ptr);
-					assert(result == buffer_offset_ref);
-#endif
+						// after compression, write into file
+						result = fwrite(&n, sizeof(size_t), 1, file_ptr);
+						assert(result == 1);
+						result = fwrite(compressed_buffer_ptr, sizeof(char), n, file_ptr);
+						assert(result == n);
+					#else
+						result = fwrite(&buffer_offset_ref, sizeof(size_t), 1, file_ptr);
+						assert(result == 1);
+						result = fwrite(tlb_ptr->buffer_ptr_, sizeof(char), buffer_offset_ref, file_ptr);
+						assert(result == buffer_offset_ref);
+					#endif
 					buffer_offset_ref = 0;
 					result = fflush(file_ptr);
 					assert(result == 0);
-#if defined(__linux__)
-					result = fsync(fileno(file_ptr));
-					assert(result == 0);
-#endif
+					#if defined(__linux__)
+						result = fsync(fileno(file_ptr));
+						assert(result == 0);
+					#endif
 				}
 				char *curr_buffer_ptr = tlb_ptr->buffer_ptr_ + buffer_offset_ref;
 				memcpy(curr_buffer_ptr, (char*)(&commit_ts), sizeof(uint64_t));
 				size_t txn_offset = sizeof(uint64_t)+sizeof(size_t);
-				for (size_t i = 0; i < access_list.access_count_; ++i){
+				for (size_t i = 0; i < access_list.access_count_; ++i) {
 					Access *access_ptr = access_list.GetAccess(i);
-					if (access_ptr->access_type_ == READ_WRITE){
+					if (access_ptr->access_type_ == READ_WRITE || access_ptr->access_type_ == NO_CC_READ_WRITE){
 						SchemaRecord *local_record_ptr = access_ptr->local_record_;
 						size_t record_size = local_record_ptr->schema_ptr_->GetSchemaSize();
 						memcpy(curr_buffer_ptr + txn_offset, (char*)(&kUpdate), sizeof(uint8_t));
@@ -65,7 +64,7 @@ namespace Cavalia{
 						memcpy(curr_buffer_ptr + txn_offset+sizeof(uint8_t)+sizeof(size_t)+sizeof(size_t), local_record_ptr->data_ptr_, record_size);
 						txn_offset += sizeof(uint8_t)+sizeof(size_t)+sizeof(size_t) + record_size;
 					}
-					else if (access_ptr->access_type_ == INSERT_ONLY){
+					else if (access_ptr->access_type_ == INSERT_ONLY || access_ptr->access_type_ == NO_CC_INSERT_ONLY){
 						SchemaRecord *global_record_ptr = access_ptr->access_record_->record_;
 						size_t record_size = global_record_ptr->schema_ptr_->GetSchemaSize();
 						memcpy(curr_buffer_ptr + txn_offset, (char*)(&kInsert), sizeof(uint8_t));
@@ -74,7 +73,7 @@ namespace Cavalia{
 						memcpy(curr_buffer_ptr + txn_offset + sizeof(uint8_t)+sizeof(size_t)+sizeof(size_t), global_record_ptr->data_ptr_, record_size);
 						txn_offset += sizeof(uint8_t)+sizeof(size_t)+sizeof(size_t)+record_size;
 					}
-					else if (access_ptr->access_type_ == DELETE_ONLY){
+					else if (access_ptr->access_type_ == DELETE_ONLY || access_ptr->access_type_ == NO_CC_DELETE_ONLY){
 						SchemaRecord *local_record_ptr = access_ptr->local_record_;
 						std::string primary_key = local_record_ptr->GetPrimaryKey();
 						size_t key_size = primary_key.size();

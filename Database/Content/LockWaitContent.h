@@ -39,31 +39,30 @@ namespace Cavalia {
 				bool ret = true;
 				AcquireLatch();
 				bool is_conflict = Conflict(lock_type, lock_type_);
-				if (is_conflict){
+				if (is_conflict) {
 					bool can_wait = true;
 					// ts should be smaller than all current owners
 					LockEntry* entry = owners_head_;
-					while (entry != NULL){
-						if (entry->timestamp_ < timestamp){
+					while (entry != NULL) {
+						if (entry->timestamp_ < timestamp) {
 							can_wait = false;
 							break;
 						}
 						entry = entry->next_;
 					}
-					if (can_wait){
+					if (can_wait) {
 						BufferWaiter(timestamp, lock_type, lock_ready);
 						*lock_ready = false;
 					}
-					else{
+					else {
 						ret = false;
 					}
-				}
-				else{
-					if(waiters_head_ != NULL && timestamp < waiters_head_->timestamp_){
+				} else {
+					if(waiters_head_ != NULL && timestamp < waiters_head_->timestamp_) {
 						BufferWaiter(timestamp, lock_type, lock_ready);
 						*lock_ready = false;
 					}
-					else{
+					else {
 						// not conflict, add to owner list
 						LockEntry* entry = new LockEntry();
 						entry->timestamp_ = timestamp;
@@ -141,12 +140,12 @@ namespace Cavalia {
 			bool Conflict(const LockType& lt1, const LockType& lt2){
 				if (lt1 == NO_LOCK || lt2 == NO_LOCK){
 					return false;
-				}
-				else if (lt1 == READ_LOCK && lt2 == READ_LOCK){
+				} else if (lt1 == READ_LOCK && lt2 == READ_LOCK) {
 					return false;
 				}
 				return true;
 			}
+			
 			void BufferWaiter(const uint64_t& timestamp, const LockType& lock_type, volatile bool* lock_ready){
 				LockEntry* entry = waiters_head_;
 				LockEntry* pre = NULL;
@@ -166,6 +165,7 @@ namespace Cavalia {
 					waiters_head_ = to_add;
 				}
 			}
+
 			void DebufferWaiters(){
 				LockEntry* en = NULL;
 				while (waiters_head_ != NULL && !Conflict(waiters_head_->lock_type_, lock_type_)){
